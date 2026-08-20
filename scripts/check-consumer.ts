@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -34,13 +34,15 @@ function parsePackedFilename(json: string): string {
 }
 
 function readOxlintVersion(): string {
-    const parsed = JSON.parse(
-        runNpm(["pkg", "get", "devDependencies.oxlint"], projectDirectory),
-    ) as unknown;
-    if (typeof parsed !== "string") {
-        throw new Error("package.json must declare a string oxlint dev dependency");
+    const packagePath = join(projectDirectory, "node_modules", "oxlint", "package.json");
+    const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as unknown;
+    if (typeof parsed !== "object" || parsed === null || !("version" in parsed)) {
+        throw new Error("installed oxlint package must declare a version");
     }
-    return parsed;
+    if (typeof parsed.version !== "string") {
+        throw new Error("installed oxlint package version must be a string");
+    }
+    return parsed.version;
 }
 
 function expectLintFailure(

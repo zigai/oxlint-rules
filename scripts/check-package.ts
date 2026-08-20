@@ -61,4 +61,9 @@ if (missingPaths.length > 0) {
     throw new Error(`npm package is missing required files: ${missingPaths.join(", ")}`);
 }
 
+const mapPaths = [...paths].filter((path) => path.endsWith(".map"));
+if (mapPaths.length > 0) {
+    throw new Error(`npm package contains unexpected map files: ${mapPaths.join(", ")}`);
+}
+
 process.stdout.write(`npm package contains ${paths.size} files and all required notices.\n`);

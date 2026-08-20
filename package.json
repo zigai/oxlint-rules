@@ -1,7 +1,6 @@
 {
   "name": "oxlint-rules",
   "version": "0.1.0",
-  "private": true,
   "description": "Reusable Oxlint rules for TypeScript projects.",
   "keywords": [
     "lint",
@@ -90,7 +89,7 @@
     "oxlint": ">=1.78.0 <2"
   },
   "engines": {
-    "node": ">=22.19.0 <27"
+    "node": ">=22.19.0"
   },
   "packageManager": "npm@11.18.0"
 }
