@@ -1,0 +1,94 @@
+{
+  "name": "oxlint-rules",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable Oxlint rules for TypeScript projects.",
+  "keywords": [
+    "lint",
+    "oxlint",
+    "plugin",
+    "typescript"
+  ],
+  "homepage": "https://github.com/zigai/oxlint-rules#readme",
+  "bugs": {
+    "url": "https://github.com/zigai/oxlint-rules/issues"
+  },
+  "license": "MIT",
+  "author": "zigai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zigai/oxlint-rules.git"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "third-party"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js",
+      "default": "./dist/config/index.js"
+    },
+    "./config/effect": {
+      "types": "./dist/config/effect.d.ts",
+      "import": "./dist/config/effect.js",
+      "default": "./dist/config/effect.js"
+    },
+    "./effect": {
+      "types": "./dist/antislop/effect/index.d.ts",
+      "import": "./dist/antislop/effect/index.js",
+      "default": "./dist/antislop/effect/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "clean": "node ./scripts/clean.ts",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "lint": "oxlint -c ./.oxlintrc.json .",
+    "lint:fix": "oxlint -c ./.oxlintrc.json . --fix",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "coverage": "npm run build && vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "package:check": "npm run build && node ./scripts/check-package.ts",
+    "prepack": "npm run build",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run package:check",
+    "verify": "npm run check"
+  },
+  "dependencies": {
+    "@oxlint/plugins": "1.78.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "oxfmt": "^0.59.0",
+    "oxlint": "1.78.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "peerDependencies": {
+    "oxlint": ">=1.78.0 <2"
+  },
+  "engines": {
+    "node": ">=22.19.0 <27"
+  },
+  "packageManager": "npm@11.18.0"
+}
