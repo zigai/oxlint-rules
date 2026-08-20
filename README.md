@@ -21,6 +21,35 @@ export default defineConfig({
 });
 ```
 
+To enable only specific rules, register the plugin directly:
+
+```ts
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  jsPlugins: ["oxlint-rules"],
+  rules: {
+    "antislop/no-never-assertions": "error",
+    "antislop/no-unknown-parameters": "error",
+  },
+});
+```
+
+Rules from the shared config can be disabled or configured normally:
+
+```ts
+import { defineConfig } from "oxlint";
+import antislop from "oxlint-rules/config";
+
+export default defineConfig({
+  extends: [antislop],
+  rules: {
+    "antislop/no-module-mocking": "off",
+    "antislop/no-runtime-typeof": ["error", { allowInTypeGuards: true }],
+  },
+});
+```
+
 Effect projects can use the Effect config instead:
 
 ```ts
