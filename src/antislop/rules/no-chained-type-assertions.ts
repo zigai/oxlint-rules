@@ -58,6 +58,7 @@ export const noChainedTypeAssertionsRule = defineRule({
             description:
                 "Disallow chained TypeScript as and angle-bracket assertions, including parenthesized chains.",
         },
+        schema: [],
         messages: {
             chained:
                 "This assertion chain discards type evidence. Keep the original precise type, or parse untrusted input at its boundary before narrowing it.",

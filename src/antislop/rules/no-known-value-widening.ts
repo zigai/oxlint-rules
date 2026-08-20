@@ -138,6 +138,7 @@ export const noKnownValueWideningRule = defineRule({
             description:
                 "Disallow syntactically established values from flowing into explicitly broad or anonymous target types that discard useful evidence.",
         },
+        schema: [],
         messages: {
             widening:
                 "The explicit {{target}} type on {{subject}} discards known type evidence. Keep inference, validate with `satisfies`, or use a named owner contract.",

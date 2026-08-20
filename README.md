@@ -61,6 +61,8 @@ export default defineConfig({
 });
 ```
 
+See the [rule reference](docs/rules.md) for available rules and options.
+
 The `antislop` rules are derived from `dmmulroy/anti-slop`. Their source and
 license are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

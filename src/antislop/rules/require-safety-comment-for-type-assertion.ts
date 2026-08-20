@@ -43,6 +43,7 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
             description:
                 "Require a nearby SAFETY comment for every TypeScript type assertion except const assertions.",
         },
+        schema: [],
         messages: {
             missingSafetyComment:
                 "This type assertion has no `SAFETY:` justification. State the checked invariant immediately before the assertion or its containing statement.",

@@ -50,4 +50,41 @@ describe("compiled plugin", () => {
             rmSync(directory, { force: true, recursive: true });
         }
     });
+
+    it("does not retain createOnce rule state between files", () => {
+        const directory = mkdtempSync(join(tmpdir(), "oxlint-rules-state-"));
+        const aliasPath = join(directory, "a-defines-alias.ts");
+        const consumerPath = join(directory, "z-uses-name.ts");
+        const configPath = join(directory, "oxlint.json");
+
+        writeFileSync(aliasPath, "type ExternalInput = object;", "utf8");
+        writeFileSync(
+            consumerPath,
+            "function accept(value: ExternalInput): void { void value; }",
+            "utf8",
+        );
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                jsPlugins: [{ name: "antislop", specifier: antislopPluginPath }],
+                rules: { "antislop/no-object-parameters": "error" },
+            }),
+            "utf8",
+        );
+
+        try {
+            const result = spawnSync(
+                oxlintPath,
+                ["--threads=1", "-c", configPath, aliasPath, consumerPath],
+                { encoding: "utf8" },
+            );
+
+            expect(result.status).toBe(0);
+            expect(`${result.stdout}\n${result.stderr}`).not.toContain(
+                "antislop(no-object-parameters)",
+            );
+        } finally {
+            rmSync(directory, { force: true, recursive: true });
+        }
+    });
 });

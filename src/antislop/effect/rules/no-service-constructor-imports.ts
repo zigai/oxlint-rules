@@ -22,6 +22,7 @@ export const noServiceConstructorImportsRule = defineRule({
             description:
                 "Disallow project-local make<CapabilityName> imports outside test and spec files.",
         },
+        schema: [],
         messages: {
             serviceConstructorImport:
                 'Do not import Effect service constructor "{{name}}" into runtime code. Import the owning Layer, yield the contextual service, and allow its requirements to propagate to the composition root.',

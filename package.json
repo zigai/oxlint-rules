@@ -21,6 +21,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
@@ -68,8 +69,9 @@
     "coverage": "npm run build && vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "package:check": "npm run build && node ./scripts/check-package.ts",
+    "consumer:check": "npm run build && node ./scripts/check-consumer.ts",
     "prepack": "npm run build",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run package:check",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run package:check && npm run consumer:check",
     "verify": "npm run check"
   },
   "dependencies": {

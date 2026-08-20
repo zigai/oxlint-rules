@@ -15,6 +15,7 @@ export const noForbiddenTermInSymbolNamesRule = defineRule({
             description:
                 'Disallow the case-insensitive substring "shape" in JavaScript, TypeScript, private, and JSX symbol names.',
         },
+        schema: [],
         messages: {
             forbiddenSymbolName:
                 'Rename symbol "{{name}}" for its domain role; "shape" describes structure rather than ownership.',

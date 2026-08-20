@@ -325,6 +325,7 @@ export const noWidenThenAssertRule = defineRule({
             description:
                 "Disallow local const flows that explicitly widen a known value before asserting the widened binding to a narrower type.",
         },
+        schema: [],
         messages: {
             widenThenAssert:
                 'Binding "{{name}}" discards type evidence and later recreates it with an assertion. Keep the precise type from initialization through use; parse boundary input once.',

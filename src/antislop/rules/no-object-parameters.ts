@@ -41,6 +41,7 @@ export const noObjectParametersRule = defineRule({
             description:
                 "Disallow object function parameters; inputs must use an owner-provided type and be parsed at their boundary.",
         },
+        schema: [],
         messages: {
             objectParameter:
                 "Parameter `{{parameter}}` uses the broad `object` type. Accept a named owner type; parse external input at its boundary before calling this function.",

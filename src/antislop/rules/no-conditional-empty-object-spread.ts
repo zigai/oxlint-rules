@@ -30,6 +30,7 @@ export const noConditionalEmptyObjectSpreadRule = defineRule({
             description:
                 "Disallow object spreads that conditionally spread an empty object to omit fields.",
         },
+        schema: [],
         messages: {
             avoid: "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.",
         },

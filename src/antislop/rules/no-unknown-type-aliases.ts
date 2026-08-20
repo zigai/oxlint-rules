@@ -20,6 +20,7 @@ export const noUnknownTypeAliasesRule = defineRule({
             description:
                 "Disallow type aliases whose resolved type is unknown; unknown must remain visible at an allowed boundary.",
         },
+        schema: [],
         messages: {
             unknownAlias:
                 "Type alias `{{alias}}` hides `unknown`. Keep `unknown` explicit at the parsing boundary or on an allowed `cause` field; otherwise use the parsed owner type.",

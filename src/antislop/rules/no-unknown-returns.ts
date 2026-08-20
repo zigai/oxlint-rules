@@ -31,6 +31,7 @@ export const noUnknownReturnsRule = defineRule({
             description:
                 "Disallow functions whose explicit return contract is unknown or Promise<unknown>.",
         },
+        schema: [],
         messages: {
             unknownReturn:
                 "This function exposes `unknown` to its caller. Parse the value at its boundary and return a named domain type.",
