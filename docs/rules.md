@@ -28,12 +28,46 @@ diagnostic-only.
 
 ```ts
 {
-  "antislop/no-runtime-typeof": ["error", { "allowInTypeGuards": true }]
+  "antislop/no-runtime-typeof": [
+    "error",
+    { "allowFunctionChecks": true, "allowInTypeGuards": true }
+  ]
 }
 ```
 
-`allowInTypeGuards` defaults to `false`. When enabled, `typeof` is allowed in
-functions with a TypeScript type-predicate return type.
+Both options default to `false`. `allowFunctionChecks` permits equality checks
+against `"function"` for identity-sensitive callable host seams.
+`allowInTypeGuards` permits `typeof` in functions with a TypeScript
+type-predicate return type. This is an explicit schema-free opt-out: moving a
+check into a type guard is not the preferred fix for schema-driven projects.
+
+### `no-unknown-parameters`
+
+```ts
+{
+  "antislop/no-unknown-parameters": ["error", { "allowInTypeGuards": true }]
+}
+```
+
+`allowInTypeGuards` defaults to `false`. Enable it together with
+`no-runtime-typeof`'s matching option only in schema-free code that uses complete
+TypeScript type predicates to parse identity-sensitive host objects.
+
+The rule permits an `unknown` parameter only when it is named `cause`, defines
+the input of a recognized parser contract, or is read once and immediately
+passed to a recognized parser. Built-in parser integrations include:
+
+| Library style                  | Recognized form                                    | Requirement                                                 |
+| ------------------------------ | -------------------------------------------------- | ----------------------------------------------------------- |
+| Zod and similar schema objects | `.parse(value)`, `.safeParse(value)`               | Use the parser result rather than the original input.       |
+| TypeBox compiled validators    | `.Parse(value)`                                    | `.Check(value)` alone is not decoding.                      |
+| Decoder objects                | `.decode(value)`, `.safeDecode(value)`             | Use the decoded result or typed failure.                    |
+| Valibot                        | `parse(schema, value)`, `safeParse(schema, value)` | The function must resolve to a named import from `valibot`. |
+
+Local top-level parser helpers are followed only when the raw parameter has one
+read and each helper immediately delegates to another recognized parser. This
+syntactic recognition does not prove that parsing is complete: the parser must
+return the concrete owner/domain value, and raw input must not continue inward.
 
 ## antislop-effect
 
