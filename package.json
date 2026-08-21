@@ -1,6 +1,6 @@
 {
   "name": "oxlint-rules",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reusable Oxlint rules for TypeScript projects.",
   "keywords": [
     "lint",
