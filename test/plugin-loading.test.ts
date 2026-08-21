@@ -51,6 +51,80 @@ describe("compiled plugin", () => {
         }
     });
 
+    it("accepts supported schema parser contracts through the Oxlint CLI", () => {
+        const directory = mkdtempSync(join(tmpdir(), "oxlint-rules-parsers-"));
+        const fixturePath = join(directory, "fixture.ts");
+        const configPath = join(directory, "oxlint.json");
+
+        writeFileSync(
+            fixturePath,
+            `
+                import { safeParse } from "valibot";
+
+                interface TypeBoxValidator {
+                    Parse(value: unknown): string;
+                }
+                type ZodParser = {
+                    parse: (value: unknown) => string;
+                };
+                declare const typebox: TypeBoxValidator;
+                declare const zod: ZodParser;
+                declare const valibotSchema: object;
+
+                export function parseTypeBox(input: unknown): string {
+                    return typebox.Parse(input);
+                }
+                export function parseZod(input: unknown): string {
+                    return zod.parse(input);
+                }
+                export function parseValibot(input: unknown): object {
+                    return safeParse(valibotSchema, input);
+                }
+
+                export const parser = {
+                    parse(value: unknown): string {
+                        return String(value);
+                    },
+                };
+
+                export function isString(value: unknown): value is string {
+                    return typeof value === "string";
+                }
+
+                export function callIfFunction(callback: (() => void) | undefined): void {
+                    if (typeof callback === "function") callback();
+                }
+            `,
+            "utf8",
+        );
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                jsPlugins: [{ name: "antislop", specifier: antislopPluginPath }],
+                rules: {
+                    "antislop/no-runtime-typeof": [
+                        "error",
+                        { allowFunctionChecks: true, allowInTypeGuards: true },
+                    ],
+                    "antislop/no-unknown-parameters": ["error", { allowInTypeGuards: true }],
+                },
+            }),
+            "utf8",
+        );
+
+        try {
+            const result = spawnSync(oxlintPath, ["-c", configPath, fixturePath], {
+                encoding: "utf8",
+            });
+            expect(result.status).toBe(0);
+            const output = `${result.stdout}\n${result.stderr}`;
+            expect(output).not.toContain("antislop(no-runtime-typeof)");
+            expect(output).not.toContain("antislop(no-unknown-parameters)");
+        } finally {
+            rmSync(directory, { force: true, recursive: true });
+        }
+    });
+
     it("does not retain createOnce rule state between files", () => {
         const directory = mkdtempSync(join(tmpdir(), "oxlint-rules-state-"));
         const aliasPath = join(directory, "a-defines-alias.ts");

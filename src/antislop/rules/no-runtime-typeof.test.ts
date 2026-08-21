@@ -5,6 +5,7 @@ import { noRuntimeTypeofRule } from "./no-runtime-typeof.ts";
 const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" } } });
 const error = { messageId: "runtimeTypeof" };
 const allowInTypeGuards = [{ allowInTypeGuards: true }];
+const allowFunctionChecks = [{ allowFunctionChecks: true }];
 
 tester.run("antislop/no-runtime-typeof", noRuntimeTypeofRule, {
     valid: [
@@ -21,6 +22,14 @@ tester.run("antislop/no-runtime-typeof", noRuntimeTypeofRule, {
             code: 'function assertString(value: unknown): asserts value is string { if (typeof value !== "string") throw new Error(); }',
             options: allowInTypeGuards,
         },
+        {
+            code: 'if (typeof callback === "function") callback();',
+            options: allowFunctionChecks,
+        },
+        {
+            code: 'if ("function" !== typeof callback) return;',
+            options: allowFunctionChecks,
+        },
     ],
     invalid: [
         { code: 'if (typeof input === "string") use(input);', errors: [error] },
@@ -36,6 +45,11 @@ tester.run("antislop/no-runtime-typeof", noRuntimeTypeofRule, {
         {
             code: 'function isString(value: unknown): value is string { const check = () => typeof value === "string"; return check(); }',
             options: allowInTypeGuards,
+            errors: [error],
+        },
+        {
+            code: 'if (typeof value === "string") use(value);',
+            options: allowFunctionChecks,
             errors: [error],
         },
     ],
