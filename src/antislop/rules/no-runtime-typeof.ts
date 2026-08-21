@@ -23,6 +23,21 @@ function isInsideTypeGuard(node: ESTree.Node): boolean {
     return false;
 }
 
+function isFunctionComparison(node: ESTree.UnaryExpression): boolean {
+    const parent = node.parent;
+    if (parent?.type !== "BinaryExpression") return false;
+    if (
+        parent.operator !== "===" &&
+        parent.operator !== "!==" &&
+        parent.operator !== "==" &&
+        parent.operator !== "!="
+    ) {
+        return false;
+    }
+    const compared = parent.left === node ? parent.right : parent.left;
+    return compared.type === "Literal" && compared.value === "function";
+}
+
 /** Disallow runtime typeof checks that narrow unparsed values instead of decoding them. */
 export const noRuntimeTypeofRule = defineRule({
     meta: {
@@ -40,16 +55,22 @@ export const noRuntimeTypeofRule = defineRule({
                 type: "object",
                 properties: {
                     allowInTypeGuards: { type: "boolean" },
+                    allowFunctionChecks: { type: "boolean" },
                 },
                 additionalProperties: false,
             },
         ],
-        defaultOptions: [{ allowInTypeGuards: false }],
+        defaultOptions: [{ allowFunctionChecks: false, allowInTypeGuards: false }],
     },
     createOnce(context) {
         return {
             UnaryExpression(node) {
                 const option = context.options?.[0];
+                const allowFunctionChecks =
+                    typeof option === "object" &&
+                    option !== null &&
+                    !Array.isArray(option) &&
+                    option.allowFunctionChecks === true;
                 const allowInTypeGuards =
                     typeof option === "object" &&
                     option !== null &&
@@ -57,6 +78,7 @@ export const noRuntimeTypeofRule = defineRule({
                     option.allowInTypeGuards === true;
                 if (
                     node.operator === "typeof" &&
+                    (!allowFunctionChecks || !isFunctionComparison(node)) &&
                     (!allowInTypeGuards || !isInsideTypeGuard(node))
                 ) {
                     context.report({ node, messageId: "runtimeTypeof" });
