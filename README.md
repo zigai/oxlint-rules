@@ -1,5 +1,9 @@
 # Oxlint Rules
 
+[![npm version](https://img.shields.io/npm/v/oxlint-rules.svg?color=blue)](https://www.npmjs.com/package/oxlint-rules)
+[![npm downloads](https://img.shields.io/npm/dm/oxlint-rules.svg)](https://www.npmjs.com/package/oxlint-rules)
+[![license](https://img.shields.io/npm/l/oxlint-rules.svg)](LICENSE)
+
 Reusable Oxlint rules for TypeScript projects.
 
 ## Install
