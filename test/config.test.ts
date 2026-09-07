@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { antislopEffectRules } from "../src/antislop/effect/rules.ts";
 import { antislopRules } from "../src/antislop/rules.ts";
+import { recommendedRules } from "../src/blank-lines/recommended.ts";
+import { recommendedConfig as blankLinesConfig } from "../src/config/blank-lines.ts";
 import antislopEffectConfig from "../src/config/effect.ts";
 import antislopConfig from "../src/config/index.ts";
 
@@ -24,6 +26,13 @@ describe("shared configs", () => {
                     (ruleName) => `antislop-effect/${ruleName}`,
                 ),
             ].sort(),
+        );
+    });
+
+    it("enables recommended blank-lines rules", () => {
+        expect(blankLinesConfig.jsPlugins).toEqual(["oxlint-rules/blank-lines"]);
+        expect(Object.keys(blankLinesConfig.rules ?? {}).sort()).toEqual(
+            Object.keys(recommendedRules).sort(),
         );
     });
 });

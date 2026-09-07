@@ -1,14 +1,76 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { recommendedRules } from "../src/blank-lines/recommended.ts";
 
 const oxlintPath = join(process.cwd(), "node_modules", ".bin", "oxlint");
 const antislopPluginPath = join(process.cwd(), "dist", "index.js");
 
 describe("compiled plugin", () => {
+    it("preserves consumer grouping and converges with Oxfmt using the full preset", () => {
+        const directory = mkdtempSync(join(tmpdir(), "oxlint-rules-consumer-spacing-"));
+        const configPath = join(directory, "oxlint.json");
+        const fixtures = [
+            'const KEY = Symbol.for("key");\nconst ENV = "ENV";\nconst OTHER = "OTHER";\n',
+            "function rotate(filePath) {\n    try {\n        if (isSmall(filePath)) {\n            return;\n        }\n\n        const rotatedPath = `${filePath}.1`;\n        rmSync(rotatedPath, { force: true });\n        renameSync(filePath, rotatedPath);\n    } catch (cause) {\n        throw cause;\n    }\n}\n",
+            "function configure(enabled) {\n    if (current === enabled) {\n        return false;\n    }\n\n    current = enabled;\n    return true;\n}\n",
+            'function normalize(text) {\n    const neutralized = clean(text);\n    return neutralized.includes("\\t") ? expand(neutralized) : neutralized;\n}\n',
+            'function scan(args) {\n    let index = 0;\n    while (index < args.length) {\n        const argument = args[index];\n        if (argument === undefined) {\n            return [];\n        }\n\n        if (argument === "-u") {\n            index += 2;\n            continue;\n        }\n\n        if (argument === "-S" || argument === "-i") {\n            index += 1;\n            continue;\n        }\n        break;\n    }\n\n    return args.slice(index);\n}\n',
+            "switch (value) {\n    case 1:\n        work();\n        return;\n    case 2:\n        return;\n}\n",
+            'it("first", () => {\n    setup();\n\n    expect(result).toBe(true);\n});\n\nit("second", () => {\n    run();\n});\n',
+            "const parseA = {\n    parse() { return 1; },\n};\n\nconst parseB = {\n    parse() { return 2; },\n};\n",
+            "type First = {\n    value: string;\n};\n\ntype Second = {\n    count: number;\n};\n",
+            "function run() {\n    // Explain the operation.\n    work();\n}\n",
+            "const width =\n    count +\n    // Extra padding.\n    2;\n",
+            "const unrelated = read();\nconst ready = check();\nif (ready) {\n    run();\n}\n",
+            "const node = <div>\n\n\n  Hello\n\n\n  world\n\n\n</div>;\n",
+        ];
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                categories: { correctness: "off" },
+                jsPlugins: [
+                    {
+                        name: "blank-lines",
+                        specifier: join(process.cwd(), "dist/blank-lines/index.js"),
+                    },
+                ],
+                rules: recommendedRules,
+            }),
+        );
+        try {
+            const paths = fixtures.map((code, index) => {
+                const path = join(directory, `fixture-${index}.tsx`);
+                writeFileSync(path, code);
+                return path;
+            });
+            const fixed = spawnSync(oxlintPath, ["-c", configPath, "--fix", ...paths], {
+                encoding: "utf8",
+            });
+            expect(fixed.status, fixed.stdout + fixed.stderr).toBe(0);
+            expect(paths.map((path) => readFileSync(path, "utf8"))).toEqual(fixtures);
+            const formatter = join(process.cwd(), "node_modules/.bin/oxfmt");
+            for (let pass = 0; pass < 2; pass += 1) {
+                const formatted = spawnSync(formatter, paths, { encoding: "utf8" });
+                expect(formatted.status, formatted.stdout + formatted.stderr).toBe(0);
+                const before = paths.map((path) => readFileSync(path, "utf8"));
+                const check = spawnSync(oxlintPath, ["-c", configPath, ...paths], {
+                    encoding: "utf8",
+                });
+                expect(check.status, check.stdout + check.stderr).toBe(0);
+                const fix = spawnSync(oxlintPath, ["-c", configPath, "--fix", ...paths], {
+                    encoding: "utf8",
+                });
+                expect(fix.status, fix.stdout + fix.stderr).toBe(0);
+                expect(paths.map((path) => readFileSync(path, "utf8"))).toEqual(before);
+            }
+        } finally {
+            rmSync(directory, { force: true, recursive: true });
+        }
+    });
     it("loads through the Oxlint CLI and reports its public rule names", () => {
         const directory = mkdtempSync(join(tmpdir(), "oxlint-rules-"));
         const fixturePath = join(directory, "fixture.ts");
@@ -157,6 +219,49 @@ describe("compiled plugin", () => {
             expect(`${result.stdout}\n${result.stderr}`).not.toContain(
                 "antislop(no-object-parameters)",
             );
+        } finally {
+            rmSync(directory, { force: true, recursive: true });
+        }
+    });
+
+    it("loads blank-lines plugin and applies whitespace autofixes through Oxlint CLI", () => {
+        const directory = mkdtempSync(join(tmpdir(), "oxlint-rules-blank-lines-"));
+        const fixturePath = join(directory, "fixture.ts");
+        const configPath = join(directory, "oxlint.json");
+        const blankLinesPluginPath = join(process.cwd(), "dist", "blank-lines", "index.js");
+
+        writeFileSync(
+            fixturePath,
+            "const ready = check();\nif (ready) {\n    run();\n}\nconst unused = read();\nif (other) {\n    run();\n}\n",
+            "utf8",
+        );
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                jsPlugins: [{ name: "blank-lines", specifier: blankLinesPluginPath }],
+                rules: {
+                    "blank-lines/control-flow-cuddling": "error",
+                },
+            }),
+            "utf8",
+        );
+
+        try {
+            const checkResult = spawnSync(oxlintPath, ["-c", configPath, fixturePath], {
+                encoding: "utf8",
+            });
+            expect(checkResult.status).not.toBe(0);
+            expect(`${checkResult.stdout}\n${checkResult.stderr}`).toContain(
+                "blank-lines(control-flow-cuddling)",
+            );
+
+            const fixResult = spawnSync(oxlintPath, ["--fix", "-c", configPath, fixturePath], {
+                encoding: "utf8",
+            });
+            expect(fixResult.status).toBe(0);
+            const content = readFileSync(fixturePath, "utf8");
+            expect(content).toContain("const unused = read();\n\nif (other)");
+            expect(content).toContain("const ready = check();\nif (ready)");
         } finally {
             rmSync(directory, { force: true, recursive: true });
         }
