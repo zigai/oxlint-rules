@@ -87,12 +87,13 @@ All options default to `true`:
 | `compactDestructuredSetup`   | `true`  | Group small destructuring setup sequences with their immediate consumer.                   |
 | `compactTryFinally`          | `true`  | Keep setup calls attached to a `try/finally` block when `finally` cleans up that resource. |
 
-#### Heuristics and boundaries
+#### Statement grouping
 
-- **Statement budget**: Compaction only applies to small statements (~30 AST nodes or fewer) and excludes nested function or class declarations.
-- **Block boundaries**: Adjacent multiline braced `if` blocks retain blank lines between them, and multiline `if` blocks do not cuddle preceding a `return`.
-- **Direct usage**: Statements stay grouped when they directly read or mutate variables from the preceding line. References inside closures or callbacks create a boundary and are not grouped.
-- **Jumps & exits**: `break` and `continue` stay attached to preceding blocks; returns after loops keep their separation.
+Related statements are grouped using their structure and binding references. Small setup-and-use sequences remain compact; distinct processing phases are separated.
+
+Direct accumulation loops stay attached to their return. Filtered loops retain a completion boundary. A returned closure stays attached to a single captured declaration, but is separated from a group containing multiple captured bindings.
+
+Existing spacing is preserved between related guards and between an exact-property deletion branch and its restoration assignment.
 
 ### `blank-lines/blank-line-before-exit`
 
@@ -103,6 +104,37 @@ All options default to `true`:
 | `shortBodySpacing` | `"never"`, `"any"` | `"never"` | Remove blank lines before short-body exits, or preserve existing spacing with `"any"`. |
 
 This applies only to bodies of 2–3 simple statements. Large JSX returns and other oversized expressions do not qualify for immediate-use compaction.
+
+### `blank-lines/declaration-group-spacing`
+
+Controls blank lines within and between declaration groups, including imports, types, variables, functions, and classes.
+
+Related single-line declarations are compact by default. Multiline structural types and arrays are separated, while reference-only union aliases remain grouped. Large function-expression groups, conditional object initializers, and module-level resource-to-state transitions introduce boundaries. Line wrapping alone does not require separation.
+
+```json
+{
+  "blank-lines/declaration-group-spacing": [
+    "warn",
+    {
+      "compactSingleLineDeclarations": true,
+      "separateMultilineDeclarations": true,
+      "betweenGroups": "always",
+      "withinGroup": "any"
+    }
+  ]
+}
+```
+
+| Option                          | Type    | Default    | Description                                                                                        |
+| ------------------------------- | ------- | ---------- | -------------------------------------------------------------------------------------------------- |
+| `compactSingleLineDeclarations` | boolean | `true`     | Keep consecutive single-line declarations in the same group compact without blank lines.           |
+| `separateMultilineDeclarations` | boolean | `true`     | Separate multiline structural types and distinguish the compact reference/query-only union family. |
+| `withinGroup`                   | policy  | `"any"`    | Fallback blank line policy within a declaration group (`"always"`, `"never"`, or `"any"`).         |
+| `betweenGroups`                 | policy  | `"always"` | Blank line policy between different declaration groups.                                            |
+| `afterGroup`                    | policy  | `"always"` | Blank line policy after a declaration group before other statements.                               |
+| `beforeGroup`                   | policy  | `"any"`    | Blank line policy before a declaration group.                                                      |
+| `compactRelatedUse`             | boolean | `true`     | Keep a single-line variable compact with its immediate use statement.                              |
+| `allowBeforeControlFlow`        | boolean | `true`     | Permit declarations directly preceding control flow (`if`, `for`, etc.) without mandatory gap.     |
 
 ### `blank-lines/lines-between-class-members`
 
@@ -170,14 +202,16 @@ Controls spacing between control flow (`if`, `for`, `while`, `switch`) and relat
 }
 ```
 
-| Option                 | Type    | Default | Description                                                                                                                              |
-| ---------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `maxCuddledStatements` | number  | `3`     | Maximum related setup statements to keep attached to the control-flow block.                                                             |
-| `allowBodyUsage`       | string  | `"any"` | How body references count as related setup: `"any"` (anywhere in body), `"first"` (first statement only), or `"never"` (condition only). |
-| `compactRelatedSetup`  | boolean | `true`  | Remove blank lines before a group of related single-line setup statements.                                                               |
-| `includeAssignments`   | boolean | `true`  | Treat variable assignments and updates as related setup.                                                                                 |
+| Option                 | Type    | Default | Description                                                                                                                                           |
+| ---------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxCuddledStatements` | number  | `3`     | Maximum related setup statements to keep attached to the control-flow block.                                                                          |
+| `allowBodyUsage`       | string  | `"any"` | How body references count as related setup: `"any"` (anywhere in body), `"first"` (first statement only), or `"never"` (condition only).              |
+| `compactRelatedSetup`  | boolean | `true`  | Remove blank lines before single-line setup whose immediate predecessor feeds the control-flow header. Body-only dependencies preserve existing gaps. |
+| `includeAssignments`   | boolean | `true`  | Treat variable assignments and updates as related setup.                                                                                              |
 
 ### `blank-lines/comment-group-spacing`
+
+Leading JSDoc and standalone next-line suppression directives, in either line-comment or block-comment form, can receive spacing before their group, but never between the directive/documentation and its target. Mixed explanatory groups containing directives retain their existing spacing. Expression-internal comments remain formatter-owned.
 
 Controls spacing around standalone comments.
 
