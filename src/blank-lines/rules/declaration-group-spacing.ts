@@ -125,7 +125,7 @@ export default createLayoutRule<Options>(
     ],
     {
         expectedBlank: "Expected a blank line at this declaration-group boundary.",
-        unexpectedBlank: "Unexpected blank line inside this declaration group.",
+        unexpectedBlank: "Unexpected blank line between these related statements.",
     },
     (context: RuleContext<Options>) => {
         const options = { ...DEFAULTS, ...context.options[0] };

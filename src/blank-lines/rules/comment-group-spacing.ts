@@ -1,5 +1,5 @@
 import { createLayoutRule, editFix } from "../rule-utils.ts";
-import { walkAst } from "../ast.ts";
+import { asNode, caseConsequent, walkAst } from "../ast.ts";
 import { isAttachmentSensitiveComment, sourceItems, type SourceItem } from "../source-items.ts";
 import { editForPolicy, getSourceCode, inspectGap, rangeOf, tokenValue } from "../spacing.ts";
 import type { AstNode, BlankLinePolicy, RuleContext } from "../types.ts";
@@ -74,6 +74,27 @@ function isStandalone(item: SourceItem, text: string): boolean {
 function isOpenDelimiter(item: SourceItem | undefined): boolean {
     const value = item === undefined ? undefined : tokenValue(item.node);
     return value === "{" || value === "[" || value === "(";
+}
+
+function isCaseBoundary(item: SourceItem, nodes: readonly AstNode[]): boolean {
+    if (tokenValue(item.node) !== ":") {
+        return false;
+    }
+    const [start, end] = rangeOf(item.node);
+    return nodes.some((node) => {
+        if (node.type !== "SwitchCase") {
+            return false;
+        }
+        const [caseStart, caseEnd] = rangeOf(node);
+        const test = asNode(node.test);
+        const firstStatement = caseConsequent(node)[0];
+        return (
+            caseStart <= start &&
+            end <= caseEnd &&
+            (test === null || rangeOf(test)[1] <= start) &&
+            (firstStatement === undefined || end <= rangeOf(firstStatement)[0])
+        );
+    });
 }
 
 function isCloseDelimiter(item: SourceItem | undefined): boolean {
@@ -181,7 +202,10 @@ export default createLayoutRule<Options>(
 
                     if (
                         previous !== undefined &&
-                        !(options.allowAtBlockBoundary && isOpenDelimiter(previous))
+                        !(
+                            options.allowAtBlockBoundary &&
+                            (isOpenDelimiter(previous) || isCaseBoundary(previous, containers))
+                        )
                     ) {
                         const policy = beforePolicy(first, options);
                         if (policy !== "any") {

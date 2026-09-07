@@ -91,7 +91,11 @@ export const recommendedRules = {
             default: "always",
             exceptAfterSingleLine: false,
             exceptBetweenOverloads: true,
-            pairs: [{ blankLine: "never", prev: "field", next: "field" }],
+            pairs: [
+                { blankLine: "never", prev: "field", next: "field" },
+                { blankLine: "always", prev: "multiline", next: "*" },
+                { blankLine: "always", prev: "*", next: "multiline" },
+            ],
         },
     ],
     "blank-lines/lines-between-type-members": [
@@ -163,6 +167,8 @@ export const testRules = {
         {
             ...recommendedRules["blank-lines/blank-line-before-exit"][1],
             ...preserveTestGroups,
+            compactShortBodies: true,
+            shortBodySpacing: "any",
         },
     ],
     "blank-lines/blank-line-after-block": [

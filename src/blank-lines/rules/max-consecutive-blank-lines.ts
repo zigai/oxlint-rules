@@ -76,7 +76,7 @@ export default createLayoutRule<Options>(
                             node: program,
                             messageId: "tooMany",
                             data: { maximum: 0 },
-                            fix: editFix({ range: [0, sourceCode.text.length], text: "" }),
+                            fix: editFix({ range: [0, sourceCode.text.length], text: "" }, true),
                         });
                     }
                     return;
@@ -89,7 +89,7 @@ export default createLayoutRule<Options>(
                         node: first.node,
                         messageId: "tooMany",
                         data: { maximum: options.maxBOF },
-                        fix: editFix(atStart),
+                        fix: editFix(atStart, true),
                     });
                 }
 
@@ -112,7 +112,7 @@ export default createLayoutRule<Options>(
                             node: current.node,
                             messageId: "tooMany",
                             data: { maximum: options.max },
-                            fix: editFix(edit),
+                            fix: editFix(edit, true),
                         });
                     }
                 }
@@ -124,7 +124,7 @@ export default createLayoutRule<Options>(
                         node: last.node,
                         messageId: "tooMany",
                         data: { maximum: options.maxEOF },
-                        fix: editFix(atEnd),
+                        fix: editFix(atEnd, true),
                     });
                 }
             },

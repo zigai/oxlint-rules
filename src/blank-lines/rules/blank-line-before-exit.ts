@@ -28,6 +28,7 @@ export interface BlankLineBeforeExitOptions extends StatementGroupingOptions {
     readonly exceptAfter?: readonly StatementSelector[];
     readonly compactAfterSingleLine?: boolean;
     readonly compactJumpsAfterBlock?: boolean;
+    readonly shortBodySpacing?: "never" | "any";
 }
 
 type Options = readonly [BlankLineBeforeExitOptions?];
@@ -39,6 +40,7 @@ const DEFAULTS: Required<BlankLineBeforeExitOptions> = {
     exceptAfter: ["if"],
     compactAfterSingleLine: true,
     compactJumpsAfterBlock: true,
+    shortBodySpacing: "never",
 };
 
 function isConfiguredExit(node: AstNode, exits: readonly ExitKind[], sourceText: string): boolean {
@@ -61,6 +63,7 @@ export default createLayoutRule<Options>(
                 minContainerLines: { type: "integer", minimum: 0 },
                 compactAfterSingleLine: { type: "boolean" },
                 compactJumpsAfterBlock: { type: "boolean" },
+                shortBodySpacing: { enum: ["never", "any"] },
                 exceptAfter: {
                     type: "array",
                     items: { type: "string" },
@@ -81,6 +84,19 @@ export default createLayoutRule<Options>(
         return statementContainerVisitors((container, statements) => {
             for (const [previous, current] of pairwise(statements)) {
                 if (!isConfiguredExit(current, options.exits, sourceCode.text)) {
+                    continue;
+                }
+                if (
+                    options.compactShortBodies &&
+                    options.shortBodySpacing === "any" &&
+                    compactStatementBoundary(
+                        container,
+                        statements,
+                        statements.indexOf(current),
+                        sourceCode,
+                        { compactShortBodies: true },
+                    )
+                ) {
                     continue;
                 }
                 if (

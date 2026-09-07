@@ -2,6 +2,7 @@ import {
     asNode,
     collectPatternNames,
     isSingleLine,
+    lineSpan,
     nodeArray,
     statementBody,
     unwrapExport,
@@ -52,6 +53,39 @@ export const statementGroupingSchema = {
     compactTryFinally: { type: "boolean" },
 } as const;
 
+function withinNodeBudget(node: AstNode): boolean {
+    let size = 0;
+    walkAst(node, () => {
+        size += 1;
+    });
+    // An AST budget is stable when a formatter merely wraps a call or condition.
+    return size <= 30;
+}
+
+function isSmallExpressionTree(node: AstNode): boolean {
+    if (hasDeferredExecution(node)) return false;
+    return withinNodeBudget(node);
+}
+
+function isSmallValueDeclaration(node: AstNode): boolean {
+    return (
+        withinNodeBudget(node) &&
+        nodeArray(unwrapExport(node).declarations).every((declaration) => {
+            let initializer = asNode(declaration.init);
+            if (initializer === null || !hasDeferredExecution(initializer)) return true;
+            while (
+                initializer?.type === "ChainExpression" ||
+                initializer?.type === "AwaitExpression"
+            ) {
+                initializer = asNode(initializer.expression ?? initializer.argument);
+            }
+            // A call result can be used immediately even when producing it takes
+            // a callback. A declaration of a closure or method object stays separate.
+            return initializer?.type === "CallExpression";
+        })
+    );
+}
+
 export function isSingleLineVariable(node: AstNode, sourceCode: SourceCode): boolean {
     return unwrapExport(node).type === "VariableDeclaration" && isSingleLine(node, sourceCode.text);
 }
@@ -61,7 +95,7 @@ export function usesDeclaredBindings(
     current: AstNode,
     sourceCode: SourceCode,
 ): boolean {
-    return !hasDeferredExecution(current) && bindingsFeedRegions(previous, [current], sourceCode);
+    return isSmallExpressionTree(current) && bindingsFeedRegions(previous, [current], sourceCode);
 }
 
 export function initializesInTry(
@@ -101,39 +135,6 @@ function isSimpleStatement(node: AstNode): boolean {
     return isSmallExpressionTree(node);
 }
 
-function isSmallExpressionTree(node: AstNode): boolean {
-    if (hasDeferredExecution(node)) return false;
-    return withinNodeBudget(node);
-}
-
-function withinNodeBudget(node: AstNode): boolean {
-    let size = 0;
-    walkAst(node, () => {
-        size += 1;
-    });
-    // An AST budget is stable when a formatter merely wraps a call or condition.
-    return size <= 30;
-}
-
-function isSmallValueDeclaration(node: AstNode): boolean {
-    return (
-        withinNodeBudget(node) &&
-        nodeArray(unwrapExport(node).declarations).every((declaration) => {
-            let initializer = asNode(declaration.init);
-            if (initializer === null || !hasDeferredExecution(initializer)) return true;
-            while (
-                initializer?.type === "ChainExpression" ||
-                initializer?.type === "AwaitExpression"
-            ) {
-                initializer = asNode(initializer.expression ?? initializer.argument);
-            }
-            // A call result can be used immediately even when producing it takes
-            // a callback. A declaration of a closure or method object stays separate.
-            return initializer?.type === "CallExpression";
-        })
-    );
-}
-
 function wrappedDeclarationBoundary(
     previous: AstNode,
     current: AstNode,
@@ -146,7 +147,6 @@ function wrappedDeclarationBoundary(
         (current.type === "ExpressionStatement" ||
             current.type === "ReturnStatement" ||
             current.type === "ThrowStatement") &&
-        isSmallExpressionTree(current) &&
         usesDeclaredBindings(previous, current, sourceCode)
     );
 }
@@ -266,14 +266,32 @@ export function conditionalUpdateBoundary(
         (isSimpleStatement(previous) ? previous : null);
     const right =
         conditionalMutation(current, sourceCode) ?? (isSimpleStatement(current) ? current : null);
-    if (left === null || right === null) return false;
+    if (left === null) return false;
     if (current.type === "ReturnStatement") {
         const argument = asNode(current.argument);
+        const consequent = asNode(previous.consequent);
+        const bodyStatements =
+            consequent?.type === "BlockStatement" ? statementBody(consequent) : [consequent];
+        const singleLineBody = bodyStatements.every(
+            (stmt) => stmt !== null && stmt !== undefined && isSingleLine(stmt, sourceCode.text),
+        );
         return (
             previous.type === "IfStatement" &&
+            singleLineBody &&
+            lineSpan(previous, sourceCode.text) <= 3 &&
             argument?.type === "Identifier" &&
             mutationFeedsRegions(left, [argument], sourceCode, true)
         );
+    }
+    if (right === null) return false;
+    if (
+        previous.type === "IfStatement" &&
+        current.type === "IfStatement" &&
+        asNode(previous.consequent)?.type === "BlockStatement" &&
+        asNode(current.consequent)?.type === "BlockStatement" &&
+        (!isSingleLine(previous, sourceCode.text) || !isSingleLine(current, sourceCode.text))
+    ) {
+        return false;
     }
     return (
         (previous.type === "IfStatement" || current.type === "IfStatement") &&
@@ -405,10 +423,10 @@ export function isCompactExitPredecessor(
     current: AstNode,
     sourceCode: SourceCode,
 ): boolean {
-    if (!isSingleLine(previous, sourceCode.text) || hasDeferredExecution(current)) return false;
+    if (!isSingleLine(previous, sourceCode.text)) return false;
     if (isSingleLineVariable(previous, sourceCode))
         return usesDeclaredBindings(previous, current, sourceCode);
-    if (previous.type !== "ExpressionStatement") return false;
+    if (previous.type !== "ExpressionStatement" || !isSmallExpressionTree(current)) return false;
     const expression = asNode(previous.expression);
     return expression?.type === "AssignmentExpression" || expression?.type === "UpdateExpression";
 }
