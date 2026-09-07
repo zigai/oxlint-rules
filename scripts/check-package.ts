@@ -4,27 +4,43 @@ function isUnknownArray(value: unknown): value is readonly unknown[] {
     return Array.isArray(value);
 }
 
-function parsePackedPaths(json: string): ReadonlySet<string> {
-    const parsed = JSON.parse(json) as unknown;
-    if (!isUnknownArray(parsed) || parsed.length !== 1) {
-        throw new Error("npm pack returned an unexpected manifest list");
-    }
+function isUnknownRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-    const manifest = parsed[0];
-    if (typeof manifest !== "object" || manifest === null || !("files" in manifest)) {
-        throw new Error("npm pack returned a manifest without files");
+function extractManifest(parsed: unknown): Readonly<Record<string, unknown>> {
+    if (isUnknownArray(parsed) && parsed.length === 1) {
+        const item = parsed[0];
+        if (isUnknownRecord(item)) {
+            return item;
+        }
     }
-    const files = manifest.files;
+    if (isUnknownRecord(parsed)) {
+        const values = Object.values(parsed);
+        if (values.length === 1) {
+            const item = values[0];
+            if (isUnknownRecord(item)) {
+                return item;
+            }
+        }
+    }
+    throw new Error("npm pack returned an unexpected manifest format");
+}
+
+function parsePackedPaths(json: string): ReadonlySet<string> {
+    const parsed: unknown = JSON.parse(json);
+    const manifest = extractManifest(parsed);
+    const files = manifest["files"];
     if (!isUnknownArray(files)) {
         throw new Error("npm pack returned a non-array files field");
     }
 
     const paths = new Set<string>();
     for (const file of files) {
-        if (typeof file !== "object" || file === null || !("path" in file)) {
-            throw new Error("npm pack returned a file without a path");
+        if (!isUnknownRecord(file)) {
+            throw new Error("npm pack returned a file that is not an object");
         }
-        const path = file.path;
+        const path = file["path"];
         if (typeof path !== "string") {
             throw new Error("npm pack returned a non-string file path");
         }

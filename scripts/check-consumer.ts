@@ -18,31 +18,50 @@ function isUnknownArray(value: unknown): value is readonly unknown[] {
     return Array.isArray(value);
 }
 
+function isUnknownRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function extractManifest(parsed: unknown): Readonly<Record<string, unknown>> {
+    if (isUnknownArray(parsed) && parsed.length === 1) {
+        const item = parsed[0];
+        if (isUnknownRecord(item)) {
+            return item;
+        }
+    }
+    if (isUnknownRecord(parsed)) {
+        const values = Object.values(parsed);
+        if (values.length === 1) {
+            const item = values[0];
+            if (isUnknownRecord(item)) {
+                return item;
+            }
+        }
+    }
+    throw new Error("npm pack returned an unexpected manifest format");
+}
+
 function parsePackedFilename(json: string): string {
-    const parsed = JSON.parse(json) as unknown;
-    if (!isUnknownArray(parsed) || parsed.length !== 1) {
-        throw new Error("npm pack returned an unexpected manifest list");
-    }
-    const manifest = parsed[0];
-    if (typeof manifest !== "object" || manifest === null || !("filename" in manifest)) {
-        throw new Error("npm pack returned a manifest without a filename");
-    }
-    if (typeof manifest.filename !== "string") {
+    const parsed: unknown = JSON.parse(json);
+    const manifest = extractManifest(parsed);
+    const filename = manifest["filename"];
+    if (typeof filename !== "string") {
         throw new Error("npm pack returned a non-string filename");
     }
-    return manifest.filename;
+    return filename;
 }
 
 function readOxlintVersion(): string {
     const packagePath = join(projectDirectory, "node_modules", "oxlint", "package.json");
-    const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as unknown;
-    if (typeof parsed !== "object" || parsed === null || !("version" in parsed)) {
+    const parsed: unknown = JSON.parse(readFileSync(packagePath, "utf8"));
+    if (!isUnknownRecord(parsed)) {
         throw new Error("installed oxlint package must declare a version");
     }
-    if (typeof parsed.version !== "string") {
+    const version = parsed["version"];
+    if (typeof version !== "string") {
         throw new Error("installed oxlint package version must be a string");
     }
-    return parsed.version;
+    return version;
 }
 
 function expectLintFailure(
@@ -50,17 +69,25 @@ function expectLintFailure(
     paths: readonly string[],
     expectedRules: readonly string[],
 ): void {
-    const result = spawnSync(npmCommand, ["exec", "--", "oxlint", ...paths], {
+    const executable =
+        process.platform === "win32"
+            ? join(consumerDirectory, "node_modules", ".bin", "oxlint.cmd")
+            : join(consumerDirectory, "node_modules", ".bin", "oxlint");
+    const result = spawnSync(executable, [...paths], {
         cwd: consumerDirectory,
         encoding: "utf8",
     });
     const output = `${result.stdout}\n${result.stderr}`;
+
     if (result.status === 0) {
-        throw new Error(`expected Oxlint to report a violation:\n${output}`);
+        throw new Error(`expected oxlint failure in consumer project, but it exited 0:\n${output}`);
     }
-    for (const rule of expectedRules) {
-        if (!output.includes(rule)) {
-            throw new Error(`Oxlint output did not include ${rule}:\n${output}`);
+
+    for (const expectedRule of expectedRules) {
+        if (!output.includes(expectedRule)) {
+            throw new Error(
+                `oxlint output did not contain expected rule "${expectedRule}":\n${output}`,
+            );
         }
     }
 }
