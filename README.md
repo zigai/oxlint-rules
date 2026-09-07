@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/oxlint-rules.svg)](https://www.npmjs.com/package/oxlint-rules)
 [![license](https://img.shields.io/npm/l/oxlint-rules.svg)](LICENSE)
 
-Reusable Oxlint rules for TypeScript type safety, dependency boundaries, and blank-line formatting. Enable a preset or choose individual rules.
+A collection of custom Oxlint rules and presets for TypeScript projects.
 
 ## Install
 

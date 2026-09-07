@@ -1,165 +1,192 @@
-# Advanced rule configuration
+# Rule configuration
 
-See the [README](../README.md) for installation, setup, presets, and the complete
-rule table. This reference covers rule options, defaults, and grouping exceptions.
+Options and configuration details for configurable rules in `oxlint-rules`.
 
-## General rules
+For installation, setup, presets, and the full rule catalog, see the [README](../README.md).
 
-### `no-runtime-typeof`
+## Antislop rules
 
-```ts
+### `antislop/no-runtime-typeof`
+
+Disallows runtime `typeof` checks in favor of decoding values at I/O boundaries.
+
+```json
 {
   "antislop/no-runtime-typeof": [
     "error",
-    { "allowFunctionChecks": true, "allowInTypeGuards": true }
+    {
+      "allowFunctionChecks": false,
+      "allowInTypeGuards": false
+    }
   ]
 }
 ```
 
-Both options default to `false`. `allowFunctionChecks` permits equality checks
-against `"function"` for identity-sensitive callable host seams.
-`allowInTypeGuards` permits `typeof` in functions with a TypeScript
-type-predicate return type. This is an explicit schema-free opt-out: moving a
-check into a type guard is not the preferred fix for schema-driven projects.
+| Option                | Type    | Default | Description                                                                      |
+| --------------------- | ------- | ------- | -------------------------------------------------------------------------------- |
+| `allowFunctionChecks` | boolean | `false` | Allow `typeof x === "function"` checks (e.g. for callbacks or callable objects). |
+| `allowInTypeGuards`   | boolean | `false` | Allow `typeof` checks inside TypeScript type guard functions (`x is T`).         |
 
-### `no-unknown-parameters`
+### `antislop/no-unknown-parameters`
 
-```ts
-{
-  "antislop/no-unknown-parameters": ["error", { "allowInTypeGuards": true }]
-}
-```
-
-`allowInTypeGuards` defaults to `false`. Enable it together with
-`no-runtime-typeof`'s matching option only in schema-free code that uses complete
-TypeScript type predicates to parse identity-sensitive host objects.
-
-The rule permits an `unknown` parameter only when it is named `cause`, defines
-the input of a recognized parser contract, or is read once and immediately
-passed to a recognized parser. Built-in parser integrations include:
-
-| Library style                  | Recognized form                                    | Requirement                                                 |
-| ------------------------------ | -------------------------------------------------- | ----------------------------------------------------------- |
-| Zod and similar schema objects | `.parse(value)`, `.safeParse(value)`               | Use the parser result rather than the original input.       |
-| TypeBox compiled validators    | `.Parse(value)`                                    | `.Check(value)` alone is not decoding.                      |
-| Decoder objects                | `.decode(value)`, `.safeDecode(value)`             | Use the decoded result or typed failure.                    |
-| Valibot                        | `parse(schema, value)`, `safeParse(schema, value)` | The function must resolve to a named import from `valibot`. |
-
-Local top-level parser helpers are followed only when the raw parameter has one
-read and each helper immediately delegates to another recognized parser. This
-syntactic recognition does not prove that parsing is complete: the parser must
-return the concrete owner/domain value, and raw input must not continue inward.
-
-## Blank-line rules
-
-The blank-line default config enables warnings and supports whitespace autofixes with
-`oxlint --fix`. The options below customize their spacing behavior.
-
-### Switch cases
-
-Long, short, and empty cases stay together by default (`longCase`, `shortCase`,
-and `emptyCase` are `"never"`). Nonempty cases without a terminating statement
-retain their spacing through `ignoreFallthrough: true`.
-
-To separate long terminating cases and preserve existing spacing after short cases:
+Requires function parameters to accept typed domain values instead of `unknown`.
 
 ```json
 {
-  "blank-lines/switch-case-spacing": ["warn", { "longCase": "always", "shortCase": "any" }]
+  "antislop/no-unknown-parameters": [
+    "error",
+    {
+      "allowInTypeGuards": false
+    }
+  ]
 }
 ```
 
-`maxCuddledLines` defaults to 2 nonblank body lines and controls the long-case threshold.
+| Option              | Type    | Default | Description                                                               |
+| ------------------- | ------- | ------- | ------------------------------------------------------------------------- |
+| `allowInTypeGuards` | boolean | `false` | Allow `unknown` parameters in TypeScript type guard functions (`x is T`). |
 
-### Statement grouping
+#### Permitted `unknown` parameters
 
-The blank-line default config compacts consecutive single-line variable
-declarations and preserve spacing around multiline declarations. Direct uses stay
-attached to their declarations; references inside nested functions and classes do
-not count as direct uses. This preserves boundaries before callback registration
-and returned objects containing methods. Unread destructuring bindings are ignored
-by the relationship check, regardless of their names.
+An `unknown` parameter is allowed without options if:
 
-The statement rules share these options, enabled by default:
+- It is named `cause` (for error chaining).
+- It is immediately passed to a recognized schema parser or validator, and the parsed output is used.
 
-| Option                       | Behavior                                                                                                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `compactShortBodies`         | Compact bodies containing two or three simple statements ending in an exit. This includes calls, awaited calls, and logging before an exit.                               |
-| `compactDestructuredSetup`   | Group a small destructuring/update/declaration sequence when all used outputs feed the update or the immediately following loop, and the new declaration feeds that loop. |
-| `compactTryFinally`          | Attach a small setup call to a try whose finally contains one small cleanup call on the same receiver and arguments.                                                      |
-| `compactErrorHandlers`       | Keep short catch bodies ending in a throw compact, including in test files.                                                                                               |
-| `compactWrappedDeclarations` | Attach a small wrapped declaration to an immediate expression or exit that reads its bindings.                                                                            |
-| `compactRelatedControlFlow`  | Group adjacent small return/throw guards or same-kind loops whose conditions read a common binding.                                                                       |
-| `compactInitializations`     | Group a leading sequence of two or three single-line declarations and simple updates.                                                                                     |
-| `compactConditionalUpdates`  | Group adjacent short branches updating the same variable or object, including small setup declarations and returning the updated object.                                  |
+#### Recognized parsers
 
-Simple statements have an AST budget of 30 nodes. They exclude nested
-functions/classes, except that a small declaration may bind the result of a call
-with an inline callback. Direct declarations of closures or method objects,
-callback registrations, and returned method objects retain their boundaries. Conditional update branches contain at most two simple mutation statements.
-These bounds keep large constructions separated and do not change merely because
-Oxfmt wraps a call, declaration, or unbraced condition. Wrapped declarations can
-participate in short bodies and immediate-use grouping; initialization-prefix
-compaction still requires single-line declarations. Small control-flow groups
-require a single simple body statement and at most 30 AST nodes per branch or
-loop. Shared predicate function names alone do not establish a relationship.
+| Library / Style          | Recognized pattern                             | Notes                                                 |
+| ------------------------ | ---------------------------------------------- | ----------------------------------------------------- |
+| **Zod / Schema objects** | `.parse(val)`, `.safeParse(val)`               | Must use the parsed result rather than the raw input. |
+| **TypeBox**              | `Value.Parse(schema, val)`                     | `.Check()` alone validates but does not decode.       |
+| **Valibot**              | `parse(schema, val)`, `safeParse(schema, val)` | Must resolve to a named import from `valibot`.        |
+| **Decoder objects**      | `.decode(val)`, `.safeDecode(val)`             | Must use the decoded result or handle typed failure.  |
 
-Declaration grouping also exposes `compactSingleLineDeclarations` and
-`compactRelatedUse`. The latter attaches an uninitialized declaration to a
-following `try` when the first statement initializes it. Exit spacing exposes
-`compactAfterSingleLine` for existing declaration/update-plus-exit sequences.
+Top-level local helper functions are followed if the raw parameter has a single read and immediately delegates to a recognized parser.
 
-Loop and switch jumps (`break` and `continue`, including labeled jumps) stay
-attached to a preceding control-flow block through
-`compactJumpsAfterBlock: true`. Block spacing exempts these jumps through
-`exceptBefore: ["break", "continue"]`. Returns after loops keep their separation.
+## Blank-line rules
 
-Try/finally pairing compares resolved receiver and argument paths or primitive literals.
-It does not infer cleanup semantics from method names, match dynamic argument calls,
-or group arbitrary setup with a try. Both `compactTryFinally` and
-`compactDestructuredSetup` can be disabled. These options do not change the
-existing return-spacing policy: small whole bodies stay compact, while longer
-functions can retain a blank line before their final return.
+Blank-line rules enforce consistent vertical spacing and support autofixing with `oxlint --fix`.
 
-### Control-flow relationships
+### Shared statement grouping
 
-`control-flow-cuddling` permits up to three related setup statements by default
-(`maxCuddledStatements: 3`). Both the condition and direct body references count
-(`allowBodyUsage: "any"`); use `"first"` to restrict body matching to its first
-statement. `compactRelatedSetup: true` removes padding before a related small
-single-line setup group; multiline setup retains its existing padding.
+Several blank-line rules (`blank-line-after-block`, `blank-line-before-exit`, `control-flow-cuddling`, `declaration-group-spacing`, `expression-group-spacing`) share compaction options. These keep closely related statements grouped together without empty lines.
 
-`requireAllBindings` applies to bindings that are actually read in the program.
-Relationships use resolved variables and static property paths, including literal
-computed properties and scoped computed identifiers. Updating one property does
-not count as updating an unrelated property on the same object. Conditional
-construction groups may update different fields of the same receiver.
+All options default to `true`:
 
-`includeAssignments` includes assignments and increment/decrement updates.
-Expression grouping treats `void call()` as a call and `delete target.property`
-as an assignment for grouping purposes. Existing expression-group spacing options
-still apply.
+| Option                       | Default | Behavior                                                                                   |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `compactShortBodies`         | `true`  | Group small bodies (2–3 simple statements ending in `return` or `throw`).                  |
+| `compactInitializations`     | `true`  | Group leading single-line declarations and simple updates.                                 |
+| `compactConditionalUpdates`  | `true`  | Group adjacent short branches or guards updating the same variable or object.              |
+| `compactErrorHandlers`       | `true`  | Keep short `catch` blocks ending in `throw` compact.                                       |
+| `compactWrappedDeclarations` | `true`  | Keep multiline wrapped declarations attached to immediate uses.                            |
+| `compactRelatedControlFlow`  | `true`  | Group adjacent guard clauses or loops that share condition bindings.                       |
+| `compactDestructuredSetup`   | `true`  | Group small destructuring setup sequences with their immediate consumer.                   |
+| `compactTryFinally`          | `true`  | Keep setup calls attached to a `try/finally` block when `finally` cleans up that resource. |
 
-Expression grouping's `allowAssignmentBeforeControlFlow` yields spacing to the
-control-flow rule for both assignment and update statements.
+#### Heuristics and boundaries
 
-### Test files and comments
+- **Statement budget**: Compaction only applies to small statements (~30 AST nodes or fewer) and excludes nested function or class declarations.
+- **Direct usage**: Statements stay grouped when they directly read or mutate variables from the preceding line. References inside closures or callbacks create a boundary and are not grouped.
+- **Jumps & exits**: `break` and `continue` stay attached to preceding blocks; returns after loops keep their separation.
 
-Test overrides disable destructured-setup, wrapped-declaration, and related-control-flow compaction,
-but keep `compactErrorHandlers` enabled so capture-and-rethrow stays together.
+### `blank-lines/switch-case-spacing`
 
-The blank-line default config includes overrides for
-`*.test.*` and `*.spec.*` in supported JS/TS extensions. These overrides preserve
-existing declaration and expression group boundaries, including setup, action,
-and assertions. They do not inspect test-framework callee names. Helpers in those
-files also retain their existing phase spacing. The overrides are exported as
-`testRules` from `oxlint-rules/blank-lines` for custom configurations.
+Controls spacing between `case` and `default` blocks in `switch` statements.
 
-Use the complete config through `extends`. If merging configs manually, preserve
-both `rules` and `overrides`; spreading only `rules` omits test-file behavior.
+```json
+{
+  "blank-lines/switch-case-spacing": [
+    "warn",
+    {
+      "maxCuddledLines": 2,
+      "longCase": "never",
+      "shortCase": "never",
+      "emptyCase": "never",
+      "ignoreFallthrough": true
+    }
+  ]
+}
+```
 
-Comment spacing preserves the gap after explanatory comments and skips comments
-inside expressions so formatting and linting agree. `afterLine` and
-`afterBlock` can be set explicitly when padding after standalone comments is
-wanted. Comments and literal contents are never removed by statement grouping.
-Exclude generated files with consumer overrides; their generators own formatting.
+| Option              | Type    | Default   | Description                                                                                       |
+| ------------------- | ------- | --------- | ------------------------------------------------------------------------------------------------- |
+| `maxCuddledLines`   | number  | `2`       | Non-blank body line threshold distinguishing short cases from long cases.                         |
+| `longCase`          | policy  | `"never"` | Blank line policy before cases longer than `maxCuddledLines` (`"always"`, `"never"`, or `"any"`). |
+| `shortCase`         | policy  | `"never"` | Blank line policy before short cases.                                                             |
+| `emptyCase`         | policy  | `"never"` | Blank line policy between consecutive empty fallthrough cases.                                    |
+| `ignoreFallthrough` | boolean | `true`    | Preserve existing spacing for fallthrough cases without a terminating jump.                       |
+
+### `blank-lines/control-flow-cuddling`
+
+Controls spacing between control flow (`if`, `for`, `while`, `switch`) and related preceding setup code.
+
+```json
+{
+  "blank-lines/control-flow-cuddling": [
+    "warn",
+    {
+      "maxCuddledStatements": 3,
+      "allowBodyUsage": "any",
+      "compactRelatedSetup": true,
+      "includeAssignments": true
+    }
+  ]
+}
+```
+
+| Option                 | Type    | Default | Description                                                                                                                              |
+| ---------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxCuddledStatements` | number  | `3`     | Maximum related setup statements to keep attached to the control-flow block.                                                             |
+| `allowBodyUsage`       | string  | `"any"` | How body references count as related setup: `"any"` (anywhere in body), `"first"` (first statement only), or `"never"` (condition only). |
+| `compactRelatedSetup`  | boolean | `true`  | Remove blank lines before a group of related single-line setup statements.                                                               |
+| `includeAssignments`   | boolean | `true`  | Treat variable assignments and updates as related setup.                                                                                 |
+
+### `blank-lines/comment-group-spacing`
+
+Controls spacing around standalone comments.
+
+```json
+{
+  "blank-lines/comment-group-spacing": [
+    "warn",
+    {
+      "beforeLine": "always",
+      "afterLine": "any",
+      "beforeBlock": "always",
+      "afterBlock": "any"
+    }
+  ]
+}
+```
+
+| Option        | Type   | Default    | Description                                                                |
+| ------------- | ------ | ---------- | -------------------------------------------------------------------------- |
+| `beforeLine`  | policy | `"always"` | Spacing before standalone line comments (`//`).                            |
+| `afterLine`   | policy | `"any"`    | Spacing after standalone line comments (`"any"` preserves author spacing). |
+| `beforeBlock` | policy | `"always"` | Spacing before standalone block comments (`/* */`).                        |
+| `afterBlock`  | policy | `"any"`    | Spacing after standalone block comments.                                   |
+
+### Test files and phase spacing
+
+Test files (`*.test.*`, `*.spec.*`) often use blank lines to separate test phases (Arrange, Act, Assert).
+
+The default `blank-lines` preset automatically applies test overrides (`testRules`) that disable compaction of declarations and expressions in test files. This preserves intentional phase boundaries without inspecting test framework APIs.
+
+When building a custom configuration without `extends`, import and apply `testRules` manually:
+
+```ts
+import { defineConfig } from "oxlint";
+import { testFiles, testRules } from "oxlint-rules/blank-lines";
+
+export default defineConfig({
+  // ...
+  overrides: [
+    {
+      files: testFiles,
+      rules: testRules,
+    },
+  ],
+});
+```
