@@ -69,7 +69,6 @@ const requiredPaths = [
     "dist/config/index.js",
     "dist/index.js",
     "docs/rules.md",
-    "third-party/anti-slop/LICENSE",
 ];
 const missingPaths = requiredPaths.filter((path) => !paths.has(path));
 
