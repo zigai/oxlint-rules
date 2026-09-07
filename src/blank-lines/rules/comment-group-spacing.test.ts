@@ -5,6 +5,11 @@ const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" }
 
 tester.run("blank-lines/comment-group-spacing", commentGroupSpacing, {
     valid: [
+        {
+            code: "work();\n/* eslint-disable-line no-console */\nnext();\n",
+            options: [{ beforeBlock: "always", afterBlock: "always" }],
+        },
+        "work();\n// Explains the following directive.\n// @ts-expect-error\nbroken();\n",
         "function run() {\n    // explanation\n    work();\n}\n",
         "const width =\n    count +\n    // Extra padding.\n    2;\n",
         "switch (value) {\ncase 1:\n    // explanation\n    work();\n    break;\n}\n",
@@ -36,6 +41,30 @@ tester.run("blank-lines/comment-group-spacing", commentGroupSpacing, {
         `,
     ],
     invalid: [
+        {
+            code: "work();\n/* eslint-disable-next-line no-console */\nconsole.log(value);\n",
+            output: "work();\n\n/* eslint-disable-next-line no-console */\nconsole.log(value);\n",
+            options: [{ afterBlock: "always" }],
+            errors: [{ messageId: "expectedBefore" }],
+        },
+        {
+            code: "work();\n/* oxlint-disable-next-line no-console */\nconsole.log(value);\n",
+            output: "work();\n\n/* oxlint-disable-next-line no-console */\nconsole.log(value);\n",
+            options: [{ afterBlock: "always" }],
+            errors: [{ messageId: "expectedBefore" }],
+        },
+        {
+            code: "function first() {}\n/** Describes the next function. */\nexport function second() {}\n",
+            output: "function first() {}\n\n/** Describes the next function. */\nexport function second() {}\n",
+            options: [{ afterBlock: "always" }],
+            errors: [{ messageId: "expectedBefore" }],
+        },
+        {
+            code: "work();\n// @ts-expect-error -- expected failure\nbroken();\n",
+            output: "work();\n\n// @ts-expect-error -- expected failure\nbroken();\n",
+            options: [{ afterLine: "always" }],
+            errors: [{ messageId: "expectedBefore" }],
+        },
         {
             code: "switch (value) {\ncase 1:\n    work();\n    // explanation\n    next();\n}\n",
             output: "switch (value) {\ncase 1:\n    work();\n\n    // explanation\n    next();\n}\n",

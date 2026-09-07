@@ -3,8 +3,50 @@ import controlFlowCuddling from "./control-flow-cuddling.ts";
 
 const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" } } });
 
+const aliasInitializers = [
+    "source",
+    "(source)",
+    "source as Target",
+    "source!",
+    "source satisfies Target",
+    "<Target>source",
+    "source<string>",
+    "((source as Target)!) satisfies Target",
+];
+
 tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
     valid: [
+        {
+            languageOptions: { sourceType: "script" },
+            code: "declare const sentinel: unknown;\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+        },
+        {
+            languageOptions: { sourceType: "script" },
+            code: "function sentinel() {}\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+        },
+        "function inspect() {\n    if (arguments[0]) {\n        acceptFirst();\n    }\n    if (arguments[1]) {\n        acceptSecond();\n    }\n}\n",
+        "function inspect() {\n    return () => {\n        if (arguments[0]) {\n            acceptFirst();\n        }\n        if (arguments[1]) {\n            acceptSecond();\n        }\n    };\n}\n",
+        {
+            languageOptions: { globals: { sentinel: "writable" } },
+            code: "function update(value) {\n    sentinel = value;\n}\nfunction configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
+        },
+        ...aliasInitializers.map(
+            (initializer) =>
+                `function configure(source) {\n    const target = ${initializer};\n    if (target) {\n        restore(target);\n    }\n}\n`,
+        ),
+        ...["load(source) as Target", "({ value: source }) satisfies Target", "[source]!"].map(
+            (initializer) =>
+                `function configure(source, enabled) {\n    const target = ${initializer};\n    if (!enabled) {\n        restore(target);\n    }\n}\n`,
+        ),
+        "function run(input) {\n    const size = measure(input);\n    if (size > limit) return;\n\n    consume(input);\n}\n",
+        "function disable(state) {\n    state.enabled = false;\n    if (state.wrapper !== undefined) {\n        restore(state.wrapper);\n    }\n}\n",
+        "function configure(target, first, second, undefined) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
+        "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
+        "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
+        "function disable(state) {\n    state.enabled = false;\n\n    if (state.wrapper !== undefined) {\n        restore(state.wrapper);\n    }\n}\n",
+        "function configure(source) {\n    const target = source;\n\n    if (!enabled) {\n        restore(target);\n    }\n}\n",
+        "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n    if (redraw) {\n        editor.render();\n    }\n}\n",
+        "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n\n    if (redraw) {\n        editor.render();\n    }\n}\n",
         {
             options: [{ compactRelatedControlFlow: false }],
             code: "function select(value) {\n    if (value === 1) {\n        return 1;\n    }\n\n    if (value === 2) {\n        return 2;\n    }\n}\n",
@@ -17,6 +59,53 @@ tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
         "const value = read();\n\nif (other) {\n    run();\n}\n",
     ],
     invalid: [
+        {
+            code: "function run(input) {\n    release(input);\n    const size = measure(input);\n    if (size > limit) return;\n\n    consume(input);\n}\n",
+            output: "function run(input) {\n    release(input);\n    const size = measure(input);\n\n    if (size > limit) return;\n\n    consume(input);\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function clear(slots, key) {\n    delete slots[key];\n    if (slots.first === undefined && slots.second === undefined) {\n        cleanup(slots);\n    }\n}\n",
+            output: "function clear(slots, key) {\n    delete slots[key];\n\n    if (slots.first === undefined && slots.second === undefined) {\n        cleanup(slots);\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        ...aliasInitializers.map((initializer) => ({
+            code: `function configure(source, enabled) {\n    const target = ${initializer};\n    if (!enabled) {\n        restore(target);\n    }\n}\n`,
+            output: `function configure(source, enabled) {\n    const target = ${initializer};\n\n    if (!enabled) {\n        restore(target);\n    }\n}\n`,
+            errors: [{ messageId: "unrelated" }],
+        })),
+        {
+            code: "function configure(source, enabled) {\n    const target = enabled\n        ? { value: source }\n        : { value: source, disabled: true };\n    if (accept(target)) {\n        apply(target);\n    }\n}\n",
+            output: "function configure(source, enabled) {\n    const target = enabled\n        ? { value: source }\n        : { value: source, disabled: true };\n\n    if (accept(target)) {\n        apply(target);\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function disable(state) {\n    if (state.active) {\n        state.enabled = false;\n        if (state.wrapper !== undefined) {\n            restore(state.wrapper);\n        }\n    }\n}\n",
+            output: "function disable(state) {\n    if (state.active) {\n        state.enabled = false;\n\n        if (state.wrapper !== undefined) {\n            restore(state.wrapper);\n        }\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function install(target, first, second) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
+            output: "function install(target, first, second) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            languageOptions: { globals: { arguments: "readonly" } },
+            code: "if (arguments[0]) {\n    acceptFirst();\n}\nif (arguments[1]) {\n    acceptSecond();\n}\n",
+            output: "if (arguments[0]) {\n    acceptFirst();\n}\n\nif (arguments[1]) {\n    acceptSecond();\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            languageOptions: { globals: { sentinel: "writable" } },
+            code: "function configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
+            output: "function configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function visit(calls, index) {\n    const call = calls[index];\n    index += 1;\n    if (call.ready) {\n        run(call);\n    }\n}\n",
+            output: "function visit(calls, index) {\n    const call = calls[index];\n    index += 1;\n\n    if (call.ready) {\n        run(call);\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
         {
             code: "const value = read();\nif (items.some(value => value.ready)) {\n    work();\n}\n",
             output: "const value = read();\n\nif (items.some(value => value.ready)) {\n    work();\n}\n",

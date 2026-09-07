@@ -5,6 +5,33 @@ const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" }
 
 tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
     valid: [
+        "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n\n    return () => combine(first, last);\n}\n",
+        "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n    return (first) => combine(first, last);\n}\n",
+        "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n    return () => combine(() => first, last);\n}\n",
+        "function factory() {\n    const first = load();\n    consume(first);\n    const last = load();\n    return () => combine(first, last);\n}\n",
+        ...[
+            ["new Set()", "result.has(value)"],
+            ["load()", "result.add(value)"],
+            ["{ add(value) {} }", "result.add(value)"],
+            ["new Set()", "result.unknown(value)"],
+        ].map(
+            ([initializer, operation]) =>
+                `function collect(values) {\n    const result = ${initializer};\n    for (const value of values) {\n        ${operation};\n    }\n\n    return result;\n}\n`,
+        ),
+        "function collect(values, Set) {\n    const result = new Set();\n    for (const value of values) {\n        result.add(value);\n    }\n\n    return result;\n}\n",
+        "function collect(values) {\n    let result = [];\n    result = load();\n    for (const value of values) {\n        result.push(value);\n    }\n\n    return result;\n}\n",
+        "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        if (!value.ready) continue;\n        result.push(value);\n    }\n\n    return result;\n}\n",
+        "function collect(values) {\n    const result = [];\n    for (const valuesOfItem of values) {\n        inner: for (const value of valuesOfItem) {\n            if (!value.ready) continue inner;\n            result.push(value);\n        }\n    }\n\n    return result;\n}\n",
+        "function collect(values) {\n    const result = [];\n    outer: for (const valuesOfItem of values) {\n        for (const value of valuesOfItem) {\n            if (!value.ready) continue outer;\n            result.push(value);\n        }\n    }\n\n    return result;\n}\n",
+        "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        value.ready && result.push(value);\n    }\n\n    return result;\n}\n",
+        "function factory() {\n    const first = load();\n    const second = load();\n\n    return () => combine(first, second);\n}\n",
+        "function factory() {\n    const value = load();\n\n    return (value) => consume(value);\n}\n",
+        "function factory() {\n    const value = load();\n\n    return () => () => consume(value);\n}\n",
+        "function factory() {\n    const value = load();\n\n    return { run() { return consume(value); } };\n}\n",
+        "function disable(state) {\n    if (state.active) {\n        state.enabled = false;\n        if (state.wrapper === state.current) {\n            state.current = state.original;\n            delete state.wrapper;\n        }\n    }\n    return;\n}\n",
+        "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        result.push(value);\n    }\n    return result;\n}\n",
+        "function build(input) {\n    let result = {};\n    if (input.first) {\n        result = { ...result, first: input.first };\n    }\n    if (input.second) {\n        result = { ...result, second: input.second };\n    }\n\n    return result;\n}\n",
+        "function total(values) {\n    let total = 0;\n    for (let total of values) {\n        total += 1;\n    }\n\n    return total;\n}\n",
         {
             languageOptions: { parserOptions: { lang: "tsx" } },
             code: `function Input({ id, name, type, className, ...props }) {
@@ -58,6 +85,50 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
         `,
     ],
     invalid: [
+        {
+            code: "function collect(groups) {\n    const result = [];\n    for (const group of groups) {\n        for (const value of group) {\n            result.push(value);\n        }\n    }\n\n    return result;\n}\n",
+            output: "function collect(groups) {\n    const result = [];\n    for (const group of groups) {\n        for (const value of group) {\n            result.push(value);\n        }\n    }\n    return result;\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
+        {
+            code: "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n    return () => combine(first, last);\n}\n",
+            output: "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n\n    return () => combine(first, last);\n}\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "function factory() {\n    const unused = load();\n    const value = load();\n\n    return () => consume(value);\n}\n",
+            output: "function factory() {\n    const unused = load();\n    const value = load();\n    return () => consume(value);\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
+        ...[
+            ["[]", "result.push(value)"],
+            ["new Set()", "result.add(value)"],
+            ["new Map()", "result.set(value.key, value)"],
+        ].map(([initializer, operation]) => ({
+            code: `function collect(values) {\n    const result = ${initializer};\n    for (const value of values) {\n        ${operation};\n    }\n\n    return result;\n}\n`,
+            output: `function collect(values) {\n    const result = ${initializer};\n    for (const value of values) {\n        ${operation};\n    }\n    return result;\n}\n`,
+            errors: [{ messageId: "unexpectedBlank" }],
+        })),
+        {
+            code: "function factory() {\n    const value = load();\n\n    return () => consume(value);\n}\n",
+            output: "function factory() {\n    const value = load();\n    return () => consume(value);\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
+        {
+            code: "function reset(state) {\n    state.enabled = false;\n    state.options = undefined;\n    clear();\n    state.cache = new Map();\n    state.cache.clear();\n\n    return;\n}\n",
+            output: "function reset(state) {\n    state.enabled = false;\n    state.options = undefined;\n    clear();\n    state.cache = new Map();\n    state.cache.clear();\n    return;\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
+        {
+            code: "function total(values) {\n    let total = 0;\n    for (const value of values) {\n        total += value;\n    }\n\n    return total;\n}\n",
+            output: "function total(values) {\n    let total = 0;\n    for (const value of values) {\n        total += value;\n    }\n    return total;\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
+        {
+            code: "function disable(state) {\n    if (state.active) {\n        restore(state.original);\n    }\n\n    return;\n}\n",
+            output: "function disable(state) {\n    if (state.active) {\n        restore(state.original);\n    }\n    return;\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
         {
             code: "function result() {\n    const value = read();\n\n    return combine(\n        value,\n        fallback,\n    );\n}\n",
             output: "function result() {\n    const value = read();\n    return combine(\n        value,\n        fallback,\n    );\n}\n",

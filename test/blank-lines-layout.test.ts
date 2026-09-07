@@ -122,7 +122,6 @@ const fixtures = [
     {
         name: "related-guards.ts",
         input: 'function select(value) {\n    if (value === 1) {\n        return "one";\n    }\n\n    if (value === 2) {\n        return "two";\n    }\n\n    return "other";\n}\n',
-        output: 'function select(value) {\n    if (value === 1) {\n        return "one";\n    }\n    if (value === 2) {\n        return "two";\n    }\n\n    return "other";\n}\n',
     },
     {
         name: "unrelated-guards.ts",
@@ -181,7 +180,6 @@ const fixtures = [
     {
         name: "callback-inside-loop.ts",
         input: "function collect(items) {\n    const results = [];\n\n    for (const item of items) {\n        results.push(item);\n        schedule(() => consume(item));\n    }\n\n    return results;\n}\n",
-        output: "function collect(items) {\n    const results = [];\n    for (const item of items) {\n        results.push(item);\n        schedule(() => consume(item));\n    }\n\n    return results;\n}\n",
     },
     {
         name: "operation-exit.ts",
@@ -230,7 +228,6 @@ const fixtures = [
     {
         name: "conditional-updates.ts",
         input: "function normalize(source) {\n    const result = capture(source);\n    if (result.min !== undefined) {\n        result.min = Math.trunc(result.min);\n    }\n\n    if (result.max !== undefined)\n        result.max = Math.trunc(result.max);\n\n    return result;\n}\n",
-        output: "function normalize(source) {\n    const result = capture(source);\n    if (result.min !== undefined) {\n        result.min = Math.trunc(result.min);\n    }\n    if (result.max !== undefined)\n        result.max = Math.trunc(result.max);\n    return result;\n}\n",
     },
     {
         name: "object-updates.ts",
@@ -258,7 +255,7 @@ const fixtures = [
     {
         name: "initialization.ts",
         input: "function tokenize(text) {\n    const tokens = [];\n\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n\n    return tokens;\n}\n",
-        output: "function tokenize(text) {\n    const tokens = [];\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n\n    return tokens;\n}\n",
+        output: "function tokenize(text) {\n    const tokens = [];\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n    return tokens;\n}\n",
     },
     {
         name: "multiline-declarations.ts",
@@ -280,6 +277,42 @@ const fixtures = [
     {
         name: "multiline-class-field.ts",
         input: "class Config {\n    defaultProps = {\n        a: 1,\n        b: 2,\n    };\n\n    canvas: CanvasSurface;\n}\n",
+    },
+    {
+        name: "type-declarations.ts",
+        input: "type AssistantContent = {\n    readonly type: string;\n    readonly text?: string;\n    readonly thinking?: string;\n};\ntype AssistantMessageLike = Pick<AssistantMessage, 'content'>;\n\ntype AssistantContentKind = 'text' | 'thinking';\n\ntype AssistantAddChildCall = AssistantContentKind | 'other';\ntype AssistantRenderInstance = {\n    readonly contentContainer?: unknown;\n};\ntype ChatComponentKind = 'assistant' | 'tool' | 'user';\n\ntype ChatContainerInstance = Container;\n",
+        output: "type AssistantContent = {\n    readonly type: string;\n    readonly text?: string;\n    readonly thinking?: string;\n};\n\ntype AssistantMessageLike = Pick<AssistantMessage, 'content'>;\ntype AssistantContentKind = 'text' | 'thinking';\ntype AssistantAddChildCall = AssistantContentKind | 'other';\n\ntype AssistantRenderInstance = {\n    readonly contentContainer?: unknown;\n};\n\ntype ChatComponentKind = 'assistant' | 'tool' | 'user';\ntype ChatContainerInstance = Container;\n",
+    },
+    {
+        name: "block-next-line-directive.ts",
+        input: "work();\n/* eslint-disable-next-line no-console */\nconsole.log(value);\n",
+        output: "work();\n\n/* eslint-disable-next-line no-console */\nconsole.log(value);\n",
+    },
+    {
+        name: "local-arguments.ts",
+        input: "function inspect() {\n    if (arguments.length > 1) {\n        first();\n    }\n    if (arguments[0]) {\n        second();\n    }\n}\n",
+    },
+    {
+        name: "asserted-alias-guard.ts",
+        input: "function configure(source: Target, enabled: boolean) {\n    const target = source as Target;\n    if (!enabled) {\n        restore(target);\n    }\n}\n",
+        output: "function configure(source: Target, enabled: boolean) {\n    const target = source as Target;\n\n    if (!enabled) {\n        restore(target);\n    }\n}\n",
+    },
+    {
+        name: "nested-restoration-target.ts",
+        input: "function restore(target, value) {\n    if (value === undefined) {\n        delete target.slot;\n        return;\n    }\n    target.slot.child = value;\n}\n",
+        output: "function restore(target, value) {\n    if (value === undefined) {\n        delete target.slot;\n        return;\n    }\n\n    target.slot.child = value;\n}\n",
+    },
+    {
+        name: "continue-filtered-collection.ts",
+        input: "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        if (!value.ready) continue;\n        result.push(value);\n    }\n\n    return result;\n}\n",
+    },
+    {
+        name: "readonly-collection-loop.ts",
+        input: "function inspect(values) {\n    const result = new Set(values);\n    for (const value of values) {\n        result.has(value);\n    }\n\n    return result;\n}\n",
+    },
+    {
+        name: "nonadjacent-closure-captures.ts",
+        input: "function factory() {\n    const first = load();\n    const unused = 0;\n    const second = load();\n\n    return () => combine(first, second);\n}\n",
     },
 ];
 
