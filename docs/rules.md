@@ -68,6 +68,8 @@ Top-level local helper functions are followed if the raw parameter has a single 
 
 Blank-line rules enforce consistent vertical spacing and support autofixing with `oxlint --fix`.
 
+Rules requesting the same whitespace change share one diagnostic and fix. Exact gap policies take precedence over `max-consecutive-blank-lines`, so removing block padding does not require a second fix invocation. Conflicting explicit gap policies are not resolved automatically.
+
 ### Shared statement grouping
 
 Several blank-line rules (`blank-line-after-block`, `blank-line-before-exit`, `control-flow-cuddling`, `declaration-group-spacing`, `expression-group-spacing`) share compaction options. These keep closely related statements grouped together without empty lines.
@@ -88,8 +90,40 @@ All options default to `true`:
 #### Heuristics and boundaries
 
 - **Statement budget**: Compaction only applies to small statements (~30 AST nodes or fewer) and excludes nested function or class declarations.
+- **Block boundaries**: Adjacent multiline braced `if` blocks retain blank lines between them, and multiline `if` blocks do not cuddle preceding a `return`.
 - **Direct usage**: Statements stay grouped when they directly read or mutate variables from the preceding line. References inside closures or callbacks create a boundary and are not grouped.
 - **Jumps & exits**: `break` and `continue` stay attached to preceding blocks; returns after loops keep their separation.
+
+### `blank-lines/blank-line-before-exit`
+
+`shortBodySpacing` controls spacing before exits in small bodies when `compactShortBodies` is enabled:
+
+| Option             | Values             | Default   | Behavior                                                                               |
+| ------------------ | ------------------ | --------- | -------------------------------------------------------------------------------------- |
+| `shortBodySpacing` | `"never"`, `"any"` | `"never"` | Remove blank lines before short-body exits, or preserve existing spacing with `"any"`. |
+
+This applies only to bodies of 2–3 simple statements. Large JSX returns and other oversized expressions do not qualify for immediate-use compaction.
+
+### `blank-lines/lines-between-class-members`
+
+The default preset enforces blank lines around class members, with compact single-line fields. Multiline fields (such as large configuration object literals) require blank lines before and after to match type-member formatting:
+
+```json
+{
+  "blank-lines/lines-between-class-members": [
+    "warn",
+    {
+      "default": "always",
+      "exceptBetweenOverloads": true,
+      "pairs": [
+        { "blankLine": "never", "prev": "field", "next": "field" },
+        { "blankLine": "always", "prev": "multiline", "next": "*" },
+        { "blankLine": "always", "prev": "*", "next": "multiline" }
+      ]
+    }
+  ]
+}
+```
 
 ### `blank-lines/switch-case-spacing`
 
@@ -168,11 +202,13 @@ Controls spacing around standalone comments.
 | `beforeBlock` | policy | `"always"` | Spacing before standalone block comments (`/* */`).                        |
 | `afterBlock`  | policy | `"any"`    | Spacing after standalone block comments.                                   |
 
+With `allowAtBlockBoundary: true` (the default), comments immediately after a `case` or `default` label may remain attached without an intervening blank line. Comments later in the case body still follow the configured spacing policy.
+
 ### Test files and phase spacing
 
 Test files (`*.test.*`, `*.spec.*`) often use blank lines to separate test phases (Arrange, Act, Assert).
 
-The default `blank-lines` preset automatically applies test overrides (`testRules`) that disable compaction of declarations and expressions in test files. This preserves intentional phase boundaries without inspecting test framework APIs.
+The default `blank-lines` preset automatically applies test overrides (`testRules`) that disable compaction of declarations and expressions in test files. For exits in small helpers, it enables `compactShortBodies` with `shortBodySpacing: "any"`: compact operation-and-return bodies remain valid, while existing blank lines are preserved. Larger bodies retain normal exit separation. These overrides preserve intentional phase boundaries without inspecting test framework APIs.
 
 When building a custom configuration without `extends`, import and apply `testRules` manually:
 
