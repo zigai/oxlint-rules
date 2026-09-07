@@ -1,28 +1,9 @@
-# Rules
+# Advanced rule configuration
 
-The shared config enables every rule below as an error. All rules are
-diagnostic-only.
+See the [README](../README.md) for installation, setup, presets, and the complete
+rule table. This reference covers rule options, defaults, and grouping exceptions.
 
-## antislop
-
-| Rule                                        | Description                                                                                |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `no-chained-type-assertions`                | Reject nested assertions that discard type evidence.                                       |
-| `no-conditional-empty-object-spread`        | Reject conditional spreads that use `{}` to omit fields.                                   |
-| `no-known-value-widening`                   | Reject broad annotations that discard evidence from a known value.                         |
-| `no-module-mocking`                         | Reject Vitest and Jest module mocks in favor of explicit dependency seams.                 |
-| `no-never-assertions`                       | Reject assertions to `never`; use control-flow exhaustiveness instead.                     |
-| `no-object-parameters`                      | Reject the broad `object` type on function inputs.                                         |
-| `no-reflect-apply`                          | Reject `Reflect.apply` in favor of typed function calls.                                   |
-| `no-reflect-get`                            | Reject `Reflect.get` in favor of typed property access or boundary parsing.                |
-| `no-runtime-typeof`                         | Require boundary parsing instead of ad hoc `typeof` narrowing.                             |
-| `no-shape-in-symbol-names`                  | Reject `shape` in symbol names.                                                            |
-| `no-unknown-parameters`                     | Reject `unknown` inputs unless named `cause` or immediately passed to a recognized parser. |
-| `no-unknown-returns`                        | Reject function contracts returning `unknown` or `Promise<unknown>`.                       |
-| `no-unknown-type-aliases`                   | Reject aliases that conceal `unknown`.                                                     |
-| `no-unsafe-dictionary-type`                 | Reject dictionary values based on `unknown`, `any`, `object`, `{}`, or equivalent aliases. |
-| `no-widen-then-assert`                      | Reject values widened to a broad type and later asserted back.                             |
-| `require-safety-comment-for-type-assertion` | Require non-const assertions to document their checked invariant with `SAFETY:`.           |
+## General rules
 
 ### `no-runtime-typeof`
 
@@ -69,12 +50,116 @@ read and each helper immediately delegates to another recognized parser. This
 syntactic recognition does not prove that parsing is complete: the parser must
 return the concrete owner/domain value, and raw input must not continue inward.
 
-## antislop-effect
+## Blank-line rules
 
-| Rule                             | Description                                                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `no-service-constructor-imports` | Reject relative imports of `make<Capability>` constructors outside test files; runtime code should use the owning Effect Layer. |
+The blank-line default config enables warnings and supports whitespace autofixes with
+`oxlint --fix`. The options below customize their spacing behavior.
 
-The collection is based on
-[dmmulroy/anti-slop](https://github.com/dmmulroy/anti-slop) and may differ from
-its source. See [third-party notices](../THIRD_PARTY_NOTICES.md).
+### Switch cases
+
+Long, short, and empty cases stay together by default (`longCase`, `shortCase`,
+and `emptyCase` are `"never"`). Nonempty cases without a terminating statement
+retain their spacing through `ignoreFallthrough: true`.
+
+To separate long terminating cases and preserve existing spacing after short cases:
+
+```json
+{
+  "blank-lines/switch-case-spacing": ["warn", { "longCase": "always", "shortCase": "any" }]
+}
+```
+
+`maxCuddledLines` defaults to 2 nonblank body lines and controls the long-case threshold.
+
+### Statement grouping
+
+The blank-line default config compacts consecutive single-line variable
+declarations and preserve spacing around multiline declarations. Direct uses stay
+attached to their declarations; references inside nested functions and classes do
+not count as direct uses. This preserves boundaries before callback registration
+and returned objects containing methods. Unread destructuring bindings are ignored
+by the relationship check, regardless of their names.
+
+The statement rules share these options, enabled by default:
+
+| Option                       | Behavior                                                                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compactShortBodies`         | Compact bodies containing two or three simple statements ending in an exit. This includes calls, awaited calls, and logging before an exit.                               |
+| `compactDestructuredSetup`   | Group a small destructuring/update/declaration sequence when all used outputs feed the update or the immediately following loop, and the new declaration feeds that loop. |
+| `compactTryFinally`          | Attach a small setup call to a try whose finally contains one small cleanup call on the same receiver and arguments.                                                      |
+| `compactErrorHandlers`       | Keep short catch bodies ending in a throw compact, including in test files.                                                                                               |
+| `compactWrappedDeclarations` | Attach a small wrapped declaration to an immediate expression or exit that reads its bindings.                                                                            |
+| `compactRelatedControlFlow`  | Group adjacent small return/throw guards or same-kind loops whose conditions read a common binding.                                                                       |
+| `compactInitializations`     | Group a leading sequence of two or three single-line declarations and simple updates.                                                                                     |
+| `compactConditionalUpdates`  | Group adjacent short branches updating the same variable or object, including small setup declarations and returning the updated object.                                  |
+
+Simple statements have an AST budget of 30 nodes. They exclude nested
+functions/classes, except that a small declaration may bind the result of a call
+with an inline callback. Direct declarations of closures or method objects,
+callback registrations, and returned method objects retain their boundaries. Conditional update branches contain at most two simple mutation statements.
+These bounds keep large constructions separated and do not change merely because
+Oxfmt wraps a call, declaration, or unbraced condition. Wrapped declarations can
+participate in short bodies and immediate-use grouping; initialization-prefix
+compaction still requires single-line declarations. Small control-flow groups
+require a single simple body statement and at most 30 AST nodes per branch or
+loop. Shared predicate function names alone do not establish a relationship.
+
+Declaration grouping also exposes `compactSingleLineDeclarations` and
+`compactRelatedUse`. The latter attaches an uninitialized declaration to a
+following `try` when the first statement initializes it. Exit spacing exposes
+`compactAfterSingleLine` for existing declaration/update-plus-exit sequences.
+
+Loop and switch jumps (`break` and `continue`, including labeled jumps) stay
+attached to a preceding control-flow block through
+`compactJumpsAfterBlock: true`. Block spacing exempts these jumps through
+`exceptBefore: ["break", "continue"]`. Returns after loops keep their separation.
+
+Try/finally pairing compares resolved receiver and argument paths or primitive literals.
+It does not infer cleanup semantics from method names, match dynamic argument calls,
+or group arbitrary setup with a try. Both `compactTryFinally` and
+`compactDestructuredSetup` can be disabled. These options do not change the
+existing return-spacing policy: small whole bodies stay compact, while longer
+functions can retain a blank line before their final return.
+
+### Control-flow relationships
+
+`control-flow-cuddling` permits up to three related setup statements by default
+(`maxCuddledStatements: 3`). Both the condition and direct body references count
+(`allowBodyUsage: "any"`); use `"first"` to restrict body matching to its first
+statement. `compactRelatedSetup: true` removes padding before a related small
+single-line setup group; multiline setup retains its existing padding.
+
+`requireAllBindings` applies to bindings that are actually read in the program.
+Relationships use resolved variables and static property paths, including literal
+computed properties and scoped computed identifiers. Updating one property does
+not count as updating an unrelated property on the same object. Conditional
+construction groups may update different fields of the same receiver.
+
+`includeAssignments` includes assignments and increment/decrement updates.
+Expression grouping treats `void call()` as a call and `delete target.property`
+as an assignment for grouping purposes. Existing expression-group spacing options
+still apply.
+
+Expression grouping's `allowAssignmentBeforeControlFlow` yields spacing to the
+control-flow rule for both assignment and update statements.
+
+### Test files and comments
+
+Test overrides disable destructured-setup, wrapped-declaration, and related-control-flow compaction,
+but keep `compactErrorHandlers` enabled so capture-and-rethrow stays together.
+
+The blank-line default config includes overrides for
+`*.test.*` and `*.spec.*` in supported JS/TS extensions. These overrides preserve
+existing declaration and expression group boundaries, including setup, action,
+and assertions. They do not inspect test-framework callee names. Helpers in those
+files also retain their existing phase spacing. The overrides are exported as
+`testRules` from `oxlint-rules/blank-lines` for custom configurations.
+
+Use the complete config through `extends`. If merging configs manually, preserve
+both `rules` and `overrides`; spreading only `rules` omits test-file behavior.
+
+Comment spacing preserves the gap after explanatory comments and skips comments
+inside expressions so formatting and linting agree. `afterLine` and
+`afterBlock` can be set explicitly when padding after standalone comments is
+wanted. Comments and literal contents are never removed by statement grouping.
+Exclude generated files with consumer overrides; their generators own formatting.
