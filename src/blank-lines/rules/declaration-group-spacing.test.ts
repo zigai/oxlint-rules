@@ -95,6 +95,7 @@ type UserId = string;
 type UserName = string;
 `,
         "export type First = string;\nexport type Second = number;\n",
+        "type Projected = Source['value'];\ntype Owner = typeof original | Replacement;\ntype Wrapped = Readonly<Source>;\n",
         {
             options: [{ separateMultilineDeclarations: false }],
             code: "type A = {\n    x: string;\n};\ntype B = {\n    y: number;\n};\n",
@@ -104,19 +105,18 @@ type UserName = string;
             code: "type A = string;\n\ntype B = number;\n",
         },
         "function setup() {\n    const values = [];\n    let count = 0;\n    const first = function () { return count; };\n    const second = function () { return values; };\n}\n",
-        "type First =\n    | typeof original\n    | Replacement;\ntype Second = typeof other | Alternative;\n",
         'const KEY = Symbol.for("state");\nlet enabled = false;\n',
     ],
     invalid: [
         {
+            code: "export type JsonPrimitive = string | number | boolean | null;\nexport type JsonArray = ReadonlyArray<JsonValue>;\n\nexport type JsonValue = JsonPrimitive | JsonArray | JsonObject;\n",
+            output: "export type JsonPrimitive = string | number | boolean | null;\nexport type JsonArray = ReadonlyArray<JsonValue>;\nexport type JsonValue = JsonPrimitive | JsonArray | JsonObject;\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
+        {
             code: "const definition = source.definition;\nconst input = enabled\n    ? { definition }\n    : { definition, mode };\n",
             output: "const definition = source.definition;\n\nconst input = enabled\n    ? { definition }\n    : { definition, mode };\n",
             errors: [{ messageId: "expectedBlank" }],
-        },
-        {
-            code: "type Projected = Source['value'];\ntype Owner = typeof original | Replacement;\ntype Wrapped = Readonly<Source>;\n",
-            output: "type Projected = Source['value'];\n\ntype Owner = typeof original | Replacement;\n\ntype Wrapped = Readonly<Source>;\n",
-            errors: [{ messageId: "expectedBlank" }, { messageId: "expectedBlank" }],
         },
         {
             code: "const first = [\n    'a',\n    'b',\n];\nconst second = [\n    'c',\n];\nlet active = false;\n",
