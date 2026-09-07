@@ -3,10 +3,13 @@
   "version": "0.2.0",
   "description": "Reusable Oxlint rules for TypeScript projects.",
   "keywords": [
+    "blank-lines",
     "lint",
     "oxlint",
     "plugin",
-    "typescript"
+    "stylistic",
+    "typescript",
+    "whitespace"
   ],
   "homepage": "https://github.com/zigai/oxlint-rules#readme",
   "bugs": {
@@ -50,6 +53,16 @@
       "types": "./dist/antislop/effect/index.d.ts",
       "import": "./dist/antislop/effect/index.js",
       "default": "./dist/antislop/effect/index.js"
+    },
+    "./blank-lines": {
+      "types": "./dist/blank-lines/index.d.ts",
+      "import": "./dist/blank-lines/index.js",
+      "default": "./dist/blank-lines/index.js"
+    },
+    "./config/blank-lines": {
+      "types": "./dist/config/blank-lines.d.ts",
+      "import": "./dist/config/blank-lines.js",
+      "default": "./dist/config/blank-lines.js"
     }
   },
   "publishConfig": {
