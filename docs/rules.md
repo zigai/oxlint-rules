@@ -109,8 +109,6 @@ This applies only to bodies of 2–3 simple statements. Large JSX returns and ot
 
 Controls blank lines within and between declaration groups, including imports, types, variables, functions, and classes.
 
-Related single-line declarations are compact by default. Multiline structural types and arrays are separated, while reference-only union aliases remain grouped. Large function-expression groups, conditional object initializers, and module-level resource-to-state transitions introduce boundaries. Line wrapping alone does not require separation.
-
 ```json
 {
   "blank-lines/declaration-group-spacing": [
@@ -125,16 +123,16 @@ Related single-line declarations are compact by default. Multiline structural ty
 }
 ```
 
-| Option                          | Type    | Default    | Description                                                                                        |
-| ------------------------------- | ------- | ---------- | -------------------------------------------------------------------------------------------------- |
-| `compactSingleLineDeclarations` | boolean | `true`     | Keep consecutive single-line declarations in the same group compact without blank lines.           |
-| `separateMultilineDeclarations` | boolean | `true`     | Separate multiline structural types and distinguish the compact reference/query-only union family. |
-| `withinGroup`                   | policy  | `"any"`    | Fallback blank line policy within a declaration group (`"always"`, `"never"`, or `"any"`).         |
-| `betweenGroups`                 | policy  | `"always"` | Blank line policy between different declaration groups.                                            |
-| `afterGroup`                    | policy  | `"always"` | Blank line policy after a declaration group before other statements.                               |
-| `beforeGroup`                   | policy  | `"any"`    | Blank line policy before a declaration group.                                                      |
-| `compactRelatedUse`             | boolean | `true`     | Keep a single-line variable compact with its immediate use statement.                              |
-| `allowBeforeControlFlow`        | boolean | `true`     | Permit declarations directly preceding control flow (`if`, `for`, etc.) without mandatory gap.     |
+| Option                          | Type    | Default    | Description                                                                                    |
+| ------------------------------- | ------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| `compactSingleLineDeclarations` | boolean | `true`     | Keep consecutive single-line declarations in the same group compact without blank lines.       |
+| `separateMultilineDeclarations` | boolean | `true`     | Separate multiline type and interface declarations.                                            |
+| `withinGroup`                   | policy  | `"any"`    | Fallback blank line policy within a declaration group (`"always"`, `"never"`, or `"any"`).     |
+| `betweenGroups`                 | policy  | `"always"` | Blank line policy between different declaration groups.                                        |
+| `afterGroup`                    | policy  | `"always"` | Blank line policy after a declaration group before other statements.                           |
+| `beforeGroup`                   | policy  | `"any"`    | Blank line policy before a declaration group.                                                  |
+| `compactRelatedUse`             | boolean | `true`     | Keep a single-line variable compact with its immediate use statement.                          |
+| `allowBeforeControlFlow`        | boolean | `true`     | Permit declarations directly preceding control flow (`if`, `for`, etc.) without mandatory gap. |
 
 ### `blank-lines/lines-between-class-members`
 
