@@ -265,8 +265,21 @@ const fixtures = [
         input: "const first = {\n    mode: 'static',\n};\n\nconst second = {\n    enabled: true,\n};\n",
     },
     {
+        name: "overlapping-block-boundary.ts",
+        input: "class Example {\n    method() {\n        return 1;\n    }\n\n\n\n}\n",
+        output: "class Example {\n    method() {\n        return 1;\n    }\n}\n",
+    },
+    {
         name: "shadowed-callback.ts",
         input: "const value = read();\n\nif (items.some(value => value.ready)) {\n    work();\n}\n",
+    },
+    {
+        name: "multiline-conditional-updates.ts",
+        input: "function configure(env) {\n    if (shouldLog) {\n        env.LOG = '1';\n        env.DEBUG = '1';\n    }\n\n    if (hasJob) {\n        env.JOB = 'run';\n    }\n}\n",
+    },
+    {
+        name: "multiline-class-field.ts",
+        input: "class Config {\n    defaultProps = {\n        a: 1,\n        b: 2,\n    };\n\n    canvas: CanvasSurface;\n}\n",
     },
 ];
 
@@ -301,9 +314,10 @@ describe("semantic statement spacing", () => {
             expect(initial.status).toBe(0);
             expect(initial.stdout).toContain('"severity": "warning"');
             expect(initial.stdout).toContain("blank-lines");
-            // Oxlint can return the diagnostics for overlapping fixes from the
-            // original pass; a fresh lint of the actual fixed files is authoritative.
-            spawnSync(cli, ["-c", configPath, "--fix", ...paths], { encoding: "utf8" });
+            const fixed = spawnSync(cli, ["-c", configPath, "--fix", "--deny-warnings", ...paths], {
+                encoding: "utf8",
+            });
+            expect(fixed.status, fixed.stdout + fixed.stderr).toBe(0);
             for (const [index, fixture] of fixtures.entries()) {
                 const path = paths[index];
                 if (path === undefined) throw new Error("Missing fixture path");
@@ -324,6 +338,54 @@ describe("semantic statement spacing", () => {
                 });
                 expect(fixed.status, fixed.stdout + fixed.stderr).toBe(0);
                 expect(paths.map((path) => readFileSync(path, "utf8"))).toEqual(before);
+            }
+        } finally {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    it("reports each shared gap once and fixes it with either owning rule enabled", () => {
+        const directory = mkdtempSync(join(tmpdir(), "oxlint-shared-gap-"));
+        const configPath = join(directory, "oxlint.json");
+        const path = join(directory, "overlap.ts");
+        const cli = join(process.cwd(), "node_modules/.bin/oxlint");
+        const input =
+            "function run(first, second) {\n    if (first) {\n        one();\n    }\n    if (second) {\n        two();\n    }\n}\n";
+        const output = input.replace("    }\n    if (second)", "    }\n\n    if (second)");
+        try {
+            for (const rules of [
+                {
+                    "blank-lines/blank-line-after-block": "warn",
+                    "blank-lines/control-flow-cuddling": "warn",
+                },
+                { "blank-lines/blank-line-after-block": "warn" },
+                { "blank-lines/control-flow-cuddling": "warn" },
+            ]) {
+                writeFileSync(
+                    configPath,
+                    JSON.stringify({
+                        categories: { correctness: "off" },
+                        jsPlugins: [join(process.cwd(), "dist/blank-lines/index.js")],
+                        rules,
+                    }),
+                );
+                writeFileSync(path, input);
+                const initial = spawnSync(cli, ["-c", configPath, "--format", "json", path], {
+                    encoding: "utf8",
+                });
+                expect(initial.status, initial.stderr).toBe(0);
+                expect(JSON.parse(initial.stdout)).toMatchObject({
+                    diagnostics: [{ filename: path, severity: "warning" }],
+                });
+                const fixed = spawnSync(cli, ["-c", configPath, "--fix", "--deny-warnings", path], {
+                    encoding: "utf8",
+                });
+                expect(fixed.status, fixed.stdout + fixed.stderr).toBe(0);
+                expect(readFileSync(path, "utf8")).toBe(output);
+                const check = spawnSync(cli, ["-c", configPath, "--deny-warnings", path], {
+                    encoding: "utf8",
+                });
+                expect(check.status, check.stdout + check.stderr).toBe(0);
             }
         } finally {
             rmSync(directory, { recursive: true, force: true });

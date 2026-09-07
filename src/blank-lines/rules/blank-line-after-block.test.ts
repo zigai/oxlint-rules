@@ -21,6 +21,7 @@ tester.run("blank-lines/blank-line-after-block", blankLineAfterBlock, {
 
             done();
         `,
+        "function configure(env) {\n    if (shouldLog) {\n        env.LOG = '1';\n    }\n\n    if (hasJob) {\n        env.JOB = 'run';\n    }\n}\n",
     ],
     invalid: [
         {

@@ -5,6 +5,29 @@ const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" }
 
 tester.run("blank-lines/declaration-group-spacing", declarationGroupSpacing, {
     valid: [
+        {
+            languageOptions: { parserOptions: { lang: "tsx" } },
+            code: `function Input({ id, name, type, className, ...props }) {
+    const fallbackID = useId();
+    const resolvedID = id ?? fallbackID;
+
+    return (
+        <input
+            type={type}
+            id={resolvedID}
+            name={name ?? resolvedID}
+            data-slot="input"
+            className={cn("base", "focus", "invalid", className)}
+            aria-describedby={resolvedID}
+            {...props}
+        />
+    );
+}
+`,
+        },
+        {
+            code: "function result() {\n    const value = read();\n\n    return [\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n    ];\n}\n",
+        },
         "const first = {\n    mode: 'static',\n};\n\nconst second = {\n    enabled: true,\n};\n",
         "const value = read();\n\nconsume(items.map(value => value));\n",
         `
@@ -20,6 +43,11 @@ tester.run("blank-lines/declaration-group-spacing", declarationGroupSpacing, {
         `,
     ],
     invalid: [
+        {
+            code: "function result() {\n    const value = read();\n\n    return combine(\n        value,\n        fallback,\n    );\n}\n",
+            output: "function result() {\n    const value = read();\n    return combine(\n        value,\n        fallback,\n    );\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
         {
             code: 'const KEY = Symbol.for("key");\n\nconst ENV = "ENV";\n\nconst OTHER = "OTHER";\n',
             output: 'const KEY = Symbol.for("key");\nconst ENV = "ENV";\nconst OTHER = "OTHER";\n',

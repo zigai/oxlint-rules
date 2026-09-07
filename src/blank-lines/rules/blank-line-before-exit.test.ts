@@ -6,6 +6,29 @@ const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" }
 tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
     valid: [
         {
+            languageOptions: { parserOptions: { lang: "tsx" } },
+            code: `function Input({ id, name, type, className, ...props }) {
+    const fallbackID = useId();
+    const resolvedID = id ?? fallbackID;
+
+    return (
+        <input
+            type={type}
+            id={resolvedID}
+            name={name ?? resolvedID}
+            data-slot="input"
+            className={cn("base", "focus", "invalid", className)}
+            aria-describedby={resolvedID}
+            {...props}
+        />
+    );
+}
+`,
+        },
+        {
+            code: "function result() {\n    const value = read();\n\n    return [\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n    ];\n}\n",
+        },
+        {
             options: [{ compactShortBodies: false, compactErrorHandlers: false }],
             code: "try {\n    work();\n} catch (cause) {\n    capture(cause);\n\n    throw cause;\n}\n",
         },
@@ -35,6 +58,11 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
         `,
     ],
     invalid: [
+        {
+            code: "function result() {\n    const value = read();\n\n    return combine(\n        value,\n        fallback,\n    );\n}\n",
+            output: "function result() {\n    const value = read();\n    return combine(\n        value,\n        fallback,\n    );\n}\n",
+            errors: [{ messageId: "unexpectedBlank" }],
+        },
         {
             options: [{ compactShortBodies: false }],
             code: "try {\n    work();\n} catch (cause) {\n    capture(cause);\n\n    throw cause;\n}\n",

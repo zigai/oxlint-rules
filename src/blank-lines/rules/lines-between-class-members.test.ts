@@ -21,6 +21,19 @@ tester.run("blank-lines/lines-between-class-members", linesBetweenClassMembers, 
                 },
             ],
         },
+        {
+            code: "class Config {\n    defaultProps = {\n        a: 1,\n        b: 2,\n    };\n\n    canvas: CanvasSurface;\n}\n",
+            options: [
+                {
+                    default: "always",
+                    pairs: [
+                        { blankLine: "never", prev: "field", next: "field" },
+                        { blankLine: "always", prev: "multiline", next: "*" },
+                        { blankLine: "always", prev: "*", next: "multiline" },
+                    ],
+                },
+            ],
+        },
     ],
     invalid: [
         {
