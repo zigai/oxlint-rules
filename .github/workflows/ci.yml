@@ -34,7 +34,7 @@ jobs:
         run: npm ci
 
       - name: Install Oxlint ${{ matrix.oxlint-version }} compatibility packages
-        run: npm install --no-save --package-lock=false oxlint@${{ matrix.oxlint-version }} @oxlint/plugins@${{ matrix.oxlint-version }}
+        run: npm install --no-save --package-lock=false --legacy-peer-deps oxlint@${{ matrix.oxlint-version }} @oxlint/plugins@${{ matrix.oxlint-version }}
 
       - name: Check
         run: npm run check
