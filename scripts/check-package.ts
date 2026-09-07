@@ -65,6 +65,8 @@ const requiredPaths = [
     "THIRD_PARTY_NOTICES.md",
     "dist/antislop/effect/index.js",
     "dist/antislop/index.js",
+    "dist/blank-lines/index.js",
+    "dist/config/blank-lines.js",
     "dist/config/effect.js",
     "dist/config/index.js",
     "dist/index.js",

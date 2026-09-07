@@ -172,6 +172,40 @@ try {
         ["antislop-effect(no-service-constructor-imports)"],
     );
 
+    writeFileSync(
+        join(consumerDirectory, "oxlint.config.ts"),
+        `
+            import { defineConfig } from "oxlint";
+            import blankLines from "oxlint-rules/config/blank-lines";
+
+            export default defineConfig({ extends: [blankLines] });
+        `,
+        "utf8",
+    );
+    writeFileSync(
+        join(consumerDirectory, "blank-lines-fixture.ts"),
+        `
+            declare const check: () => boolean;
+            declare const read: () => string;
+            declare const run: () => void;
+            declare const other: boolean;
+            const ready = check();
+            if (ready) {
+                run();
+            }
+            const value = read();
+            if (other) {
+                run();
+            }
+        `,
+        "utf8",
+    );
+    expectLintFailure(
+        consumerDirectory,
+        ["--deny-warnings", "blank-lines-fixture.ts"],
+        ["blank-lines(control-flow-cuddling)"],
+    );
+
     process.stdout.write("packed package works in a clean consumer project.\n");
 } finally {
     rmSync(packageDirectory, { force: true, recursive: true });
