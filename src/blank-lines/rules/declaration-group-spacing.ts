@@ -34,7 +34,7 @@ export interface DeclarationGroupSpacingOptions extends StatementGroupingOptions
     readonly unlisted?: "ignore" | "own-group";
     readonly allowBeforeControlFlow?: boolean;
     readonly compactSingleLineDeclarations?: boolean;
-    /** Separate multiline type declarations; reference-only unions form their own compact family. */
+    /** Separate multiline type and interface declarations. */
     readonly separateMultilineDeclarations?: boolean;
     readonly compactRelatedUse?: boolean;
 }
@@ -95,17 +95,6 @@ function variableInitializer(statement: AstNode | undefined): AstNode | null {
     return declarations.length === 1 ? asNode(declarations[0]?.init) : null;
 }
 
-function isReferenceUnion(statement: AstNode): boolean {
-    const declaration = unwrapExport(statement);
-    if (declaration.type !== "TSTypeAliasDeclaration") return false;
-    const annotation = asNode(declaration.typeAnnotation);
-    return (
-        annotation?.type === "TSUnionType" &&
-        nodeArray(annotation.types).every(
-            (member) => member.type === "TSTypeReference" || member.type === "TSTypeQuery",
-        )
-    );
-}
 function separatesVariableDeclarations(
     container: AstNode,
     statements: readonly AstNode[],
@@ -251,8 +240,6 @@ export default createLayoutRule<Options>(
                         if (previousGroup === currentGroup && previousKind !== "import") {
                             const previousSingle = isSingleLine(previous, sourceCode.text);
                             const currentSingle = isSingleLine(current, sourceCode.text);
-                            const previousReferenceUnion = isReferenceUnion(previous);
-                            const currentReferenceUnion = isReferenceUnion(current);
                             if (
                                 options.withinGroup === "any" &&
                                 separatesVariableDeclarations(
@@ -263,14 +250,6 @@ export default createLayoutRule<Options>(
                                 )
                             ) {
                                 policy = "always";
-                            } else if (
-                                options.separateMultilineDeclarations &&
-                                (previousReferenceUnion || currentReferenceUnion)
-                            ) {
-                                policy =
-                                    previousReferenceUnion && currentReferenceUnion
-                                        ? "never"
-                                        : "always";
                             } else if (
                                 options.compactSingleLineDeclarations &&
                                 previousSingle &&
