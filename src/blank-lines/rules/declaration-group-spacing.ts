@@ -2,12 +2,14 @@ import {
     compactStatementBoundary,
     initializesInTry,
     isSingleLineVariable,
+    returnedClosureBoundary,
     usesDeclaredBindings,
+    withinNodeBudget,
     statementGroupingDefaults,
     statementGroupingSchema,
     type StatementGroupingOptions,
 } from "../related-statements.ts";
-import { areSameFunctionOverloads } from "../ast.ts";
+import { areSameFunctionOverloads, asNode, isSingleLine, nodeArray, unwrapExport } from "../ast.ts";
 import { hasDeferredExecution } from "../references.ts";
 import {
     createLayoutRule,
@@ -21,7 +23,7 @@ import {
     type DeclarationKind,
 } from "../selectors.ts";
 import { getSourceCode } from "../spacing.ts";
-import type { BlankLinePolicy, RuleContext } from "../types.ts";
+import type { AstNode, BlankLinePolicy, RuleContext } from "../types.ts";
 
 export interface DeclarationGroupSpacingOptions extends StatementGroupingOptions {
     readonly groups?: readonly (readonly DeclarationKind[])[];
@@ -32,6 +34,8 @@ export interface DeclarationGroupSpacingOptions extends StatementGroupingOptions
     readonly unlisted?: "ignore" | "own-group";
     readonly allowBeforeControlFlow?: boolean;
     readonly compactSingleLineDeclarations?: boolean;
+    /** Separate multiline type declarations; reference-only unions form their own compact family. */
+    readonly separateMultilineDeclarations?: boolean;
     readonly compactRelatedUse?: boolean;
 }
 
@@ -54,6 +58,7 @@ const DEFAULTS: Required<DeclarationGroupSpacingOptions> = {
     unlisted: "own-group",
     allowBeforeControlFlow: true,
     compactSingleLineDeclarations: true,
+    separateMultilineDeclarations: true,
     compactRelatedUse: true,
 };
 
@@ -80,6 +85,84 @@ function groupIndex(
         return index;
     }
     return unlisted === "own-group" ? groups.length + DECLARATION_KINDS.indexOf(kind) : null;
+}
+
+function variableInitializer(statement: AstNode | undefined): AstNode | null {
+    if (statement === undefined) return null;
+    const declaration = unwrapExport(statement);
+    if (declaration.type !== "VariableDeclaration") return null;
+    const declarations = nodeArray(declaration.declarations);
+    return declarations.length === 1 ? asNode(declarations[0]?.init) : null;
+}
+
+function isReferenceUnion(statement: AstNode): boolean {
+    const declaration = unwrapExport(statement);
+    if (declaration.type !== "TSTypeAliasDeclaration") return false;
+    const annotation = asNode(declaration.typeAnnotation);
+    return (
+        annotation?.type === "TSUnionType" &&
+        nodeArray(annotation.types).every(
+            (member) => member.type === "TSTypeReference" || member.type === "TSTypeQuery",
+        )
+    );
+}
+function separatesVariableDeclarations(
+    container: AstNode,
+    statements: readonly AstNode[],
+    index: number,
+    text: string,
+): boolean {
+    const previous = statements[index - 1];
+    const current = statements[index];
+    if (previous === undefined || current === undefined) return false;
+    const previousDeclaration = unwrapExport(previous);
+    const currentDeclaration = unwrapExport(current);
+    if (
+        previousDeclaration.type !== "VariableDeclaration" ||
+        currentDeclaration.type !== "VariableDeclaration"
+    ) {
+        return false;
+    }
+    const previousInitializer = variableInitializer(previous);
+    const currentInitializer = variableInitializer(current);
+    // Separate allocated module resources from scalar accounting state, not
+    // ordinary constant keys followed by an enable flag or local setup.
+    if (
+        container.type === "Program" &&
+        previousDeclaration.kind === "const" &&
+        (currentDeclaration.kind === "let" || currentDeclaration.kind === "var") &&
+        previousInitializer?.type === "NewExpression" &&
+        currentInitializer?.type === "Literal"
+    ) {
+        return true;
+    }
+    // A vertically laid-out list is a declaration unit, unlike a wrapped call
+    // or a multiline type annotation on a scalar binding.
+    if (
+        (previousInitializer?.type === "ArrayExpression" &&
+            !isSingleLine(previousInitializer, text)) ||
+        (currentInitializer?.type === "ArrayExpression" && !isSingleLine(currentInitializer, text))
+    ) {
+        return true;
+    }
+    if (
+        currentInitializer?.type === "ConditionalExpression" &&
+        asNode(currentInitializer.consequent)?.type === "ObjectExpression" &&
+        asNode(currentInitializer.alternate)?.type === "ObjectExpression" &&
+        !isSingleLine(currentInitializer, text)
+    ) {
+        return true;
+    }
+    // Function-expression peers form an implementation section. Small setup
+    // closures and a single installed wrapper do not create such a section.
+    if (currentInitializer?.type !== "FunctionExpression") return false;
+    if (previousInitializer?.type === "FunctionExpression") {
+        return !withinNodeBudget(previousInitializer) || !withinNodeBudget(currentInitializer);
+    }
+    return (
+        variableInitializer(statements[index + 1])?.type === "FunctionExpression" &&
+        !withinNodeBudget(currentInitializer)
+    );
 }
 
 export default createLayoutRule<Options>(
@@ -119,6 +202,7 @@ export default createLayoutRule<Options>(
                 unlisted: { enum: ["ignore", "own-group"] },
                 allowBeforeControlFlow: { type: "boolean" },
                 compactSingleLineDeclarations: { type: "boolean" },
+                separateMultilineDeclarations: { type: "boolean" },
                 compactRelatedUse: { type: "boolean" },
             },
         },
@@ -164,13 +248,43 @@ export default createLayoutRule<Options>(
                             previousGroup === currentGroup
                                 ? options.withinGroup
                                 : options.betweenGroups;
-                        if (
-                            previousGroup === currentGroup &&
-                            options.compactSingleLineDeclarations &&
-                            isSingleLineVariable(previous, sourceCode) &&
-                            isSingleLineVariable(current, sourceCode)
-                        ) {
-                            policy = "never";
+                        if (previousGroup === currentGroup && previousKind !== "import") {
+                            const previousSingle = isSingleLine(previous, sourceCode.text);
+                            const currentSingle = isSingleLine(current, sourceCode.text);
+                            const previousReferenceUnion = isReferenceUnion(previous);
+                            const currentReferenceUnion = isReferenceUnion(current);
+                            if (
+                                options.withinGroup === "any" &&
+                                separatesVariableDeclarations(
+                                    container,
+                                    statements,
+                                    statements.indexOf(current),
+                                    sourceCode.text,
+                                )
+                            ) {
+                                policy = "always";
+                            } else if (
+                                options.separateMultilineDeclarations &&
+                                (previousReferenceUnion || currentReferenceUnion)
+                            ) {
+                                policy =
+                                    previousReferenceUnion && currentReferenceUnion
+                                        ? "never"
+                                        : "always";
+                            } else if (
+                                options.compactSingleLineDeclarations &&
+                                previousSingle &&
+                                currentSingle
+                            ) {
+                                policy = "never";
+                            } else if (
+                                options.separateMultilineDeclarations &&
+                                (previousKind === "type" || previousKind === "interface") &&
+                                (currentKind === "type" || currentKind === "interface") &&
+                                (!previousSingle || !currentSingle)
+                            ) {
+                                policy = "always";
+                            }
                         }
                     }
                 } else if (previousKind !== null) {
@@ -218,7 +332,11 @@ export default createLayoutRule<Options>(
                     (current.type === "ExpressionStatement" ||
                         current.type === "ReturnStatement" ||
                         current.type === "ThrowStatement") &&
-                    hasDeferredExecution(current)
+                    hasDeferredExecution(current) &&
+                    !(
+                        options.compactWrappedDeclarations &&
+                        returnedClosureBoundary(previous, current, sourceCode)
+                    )
                 ) {
                     policy = options.afterGroup;
                 }

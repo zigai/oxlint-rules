@@ -1,5 +1,6 @@
 import {
     compactStatementBoundary,
+    restorationBoundary,
     statementGroupingDefaults,
     statementGroupingSchema,
     type StatementGroupingOptions,
@@ -54,6 +55,11 @@ export default createLayoutRule<Options>(
 
         return statementContainerVisitors((container, statements) => {
             for (const [previous, current] of pairwise(statements)) {
+                if (
+                    options.compactConditionalUpdates &&
+                    restorationBoundary(previous, current, sourceCode)
+                )
+                    continue;
                 const compact = compactStatementBoundary(
                     container,
                     statements,
@@ -71,6 +77,10 @@ export default createLayoutRule<Options>(
                 ) {
                     continue;
                 }
+                // Related conditionals can form one group or intentional subphases.
+                // Accept either layout rather than flattening an existing boundary.
+                if (compact && previous.type === "IfStatement" && current.type === "IfStatement")
+                    continue;
                 reportGapPolicy(context, previous, current, compact ? "never" : "always", {
                     always: "expectedBlank",
                     never: "unexpectedBlank",

@@ -8,9 +8,9 @@ export interface SourceItem {
 }
 
 /**
- * Comments whose adjacency can affect another tool are excluded from spacing
- * edits. This covers JSDoc, TypeScript suppression comments, lint/format
- * directives, coverage directives, triple-slash references, and bundler hints.
+ * Comments whose attachment can affect another tool require protected spacing.
+ * This covers JSDoc, TypeScript suppression comments, lint/format directives,
+ * coverage directives, triple-slash references, and bundler hints.
  */
 export function isAttachmentSensitiveComment(item: SourceItem, sourceText: string): boolean {
     if (!item.isComment) {

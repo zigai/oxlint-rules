@@ -193,7 +193,25 @@ export default createLayoutRule<Options>(
                         continue;
                     }
                     const group = items.slice(index, lastIndex + 1);
-                    if (group.some((item) => isAttachmentSensitiveComment(item, sourceCode.text))) {
+                    const attachmentSensitive = group.some((item) =>
+                        isAttachmentSensitiveComment(item, sourceCode.text),
+                    );
+                    // Leading documentation and next-line directives attach forwards.
+                    // Padding before their group is safe; padding after it is not.
+                    const forwardAttached =
+                        isAttachmentSensitiveComment(first, sourceCode.text) &&
+                        group.every((item) => {
+                            if (!isAttachmentSensitiveComment(item, sourceCode.text)) return true;
+                            const [from, to] = rangeOf(item.node);
+                            const raw = sourceCode.text.slice(from, to);
+                            return (
+                                raw.startsWith("/**") ||
+                                /^(?:\/\/|\/\*)\s*(?:@ts-(?:expect-error|ignore)\b|(?:oxlint|eslint)-disable-next-line\b)/.test(
+                                    raw,
+                                )
+                            );
+                        });
+                    if (attachmentSensitive && !forwardAttached) {
                         index = lastIndex + 1;
                         continue;
                     }
@@ -227,6 +245,7 @@ export default createLayoutRule<Options>(
                     }
 
                     if (
+                        !attachmentSensitive &&
                         next !== undefined &&
                         !(options.allowAtBlockBoundary && isCloseDelimiter(next))
                     ) {

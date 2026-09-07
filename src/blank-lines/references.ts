@@ -65,6 +65,14 @@ export function shareReadBinding(left: AstNode, right: AstNode, sourceCode: Sour
         )
             return;
         const binding = resolveBinding(node, node.name, sourceCode);
+        // Implicit unwritten globals are not shared application state. Synthetic
+        // function bindings and actual declarations retain their binding identity.
+        if (
+            binding?.defs?.length === 0 &&
+            binding.scope.type === "global" &&
+            !binding.references.some((reference) => reference.isWrite())
+        )
+            return;
         if (
             binding !== null &&
             directlyReferences(left, binding) &&
@@ -202,7 +210,10 @@ export function mutationPath(statement: AstNode, sourceCode: SourceCode): Access
     if (statement.type !== "ExpressionStatement" || expression === null) return null;
     if (expression.type === "AssignmentExpression")
         return accessPath(asNode(expression.left), sourceCode);
-    if (expression.type === "UpdateExpression")
+    if (
+        expression.type === "UpdateExpression" ||
+        (expression.type === "UnaryExpression" && expression.operator === "delete")
+    )
         return accessPath(asNode(expression.argument), sourceCode);
     return null;
 }

@@ -1,5 +1,6 @@
 import {
     compactStatementBoundary,
+    deferredGuardBoundary,
     statementGroupingDefaults,
     statementGroupingSchema,
     type StatementGroupingOptions,
@@ -137,6 +138,11 @@ export default createLayoutRule<Options>(
             for (const [previous, current] of pairwise(statements)) {
                 const previousKind = expressionKind(previous);
                 const currentKind = expressionKind(current);
+                if (
+                    options.compactRelatedControlFlow &&
+                    deferredGuardBoundary(statements, statements.indexOf(current), sourceCode)
+                )
+                    continue;
                 const previousSelected =
                     previousKind !== null && options.kinds.includes(previousKind);
                 const currentSelected = currentKind !== null && options.kinds.includes(currentKind);

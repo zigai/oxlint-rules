@@ -53,11 +53,14 @@ export interface SourceCode {
 }
 
 export interface Scope {
+    readonly type: string;
     readonly upper: Scope | null;
     readonly set: ReadonlyMap<string, ScopeVariable>;
 }
 
 export interface ScopeVariable {
+    readonly scope: Scope;
+    readonly defs?: readonly unknown[];
     readonly references: readonly {
         readonly identifier: AstNode;
         isRead(): boolean;

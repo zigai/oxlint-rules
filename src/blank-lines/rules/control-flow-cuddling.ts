@@ -1,6 +1,8 @@
 import { bindingsFeedRegions, mutationFeedsRegions } from "../references.ts";
 import {
     compactStatementBoundary,
+    deferredGuardBoundary,
+    isPreflightSetup,
     statementGroupingDefaults,
     statementGroupingSchema,
     type StatementGroupingOptions,
@@ -131,6 +133,48 @@ function bindingsAreRelated(
     options: Required<ControlFlowCuddlingOptions>,
     sourceCode: SourceCode,
 ): boolean {
+    if (candidate.type === "VariableDeclaration") {
+        const declarations = nodeArray(candidate.declarations);
+        const aliases =
+            declarations.length > 0 &&
+            declarations.every((node) => {
+                let initializer = asNode(node.init);
+                while (
+                    initializer?.type === "ParenthesizedExpression" ||
+                    initializer?.type === "ChainExpression" ||
+                    initializer?.type === "TSAsExpression" ||
+                    initializer?.type === "TSInstantiationExpression" ||
+                    initializer?.type === "TSNonNullExpression" ||
+                    initializer?.type === "TSSatisfiesExpression" ||
+                    initializer?.type === "TSTypeAssertion"
+                ) {
+                    initializer = asNode(initializer.expression);
+                }
+                return initializer?.type === "Identifier";
+            });
+        const aggregateChoice =
+            !isSingleLine(candidate, sourceCode.text) &&
+            declarations.some((node) => {
+                const initializer = asNode(node.init);
+                return (
+                    initializer?.type === "ConditionalExpression" &&
+                    asNode(initializer.consequent)?.type === "ObjectExpression" &&
+                    asNode(initializer.alternate)?.type === "ObjectExpression"
+                );
+            });
+        if (
+            aggregateChoice ||
+            (aliases &&
+                !bindingsFeedRegions(
+                    candidate,
+                    headerNodes(control),
+                    sourceCode,
+                    false,
+                    options.requireAllBindings,
+                ))
+        )
+            return false;
+    }
     const regions = [
         ...(options.allowConditionUsage ? headerNodes(control) : []),
         ...bodyNodes(control, options.allowBodyUsage),
@@ -144,7 +188,18 @@ function bindingsAreRelated(
             options.requireAllBindings,
             "either",
         ) ||
-        (options.includeAssignments && mutationFeedsRegions(candidate, regions, sourceCode))
+        (options.includeAssignments &&
+            mutationFeedsRegions(
+                candidate,
+                regions,
+                sourceCode,
+                asNode(candidate.expression)?.type === "AssignmentExpression" &&
+                    [
+                        "FunctionDeclaration",
+                        "FunctionExpression",
+                        "ArrowFunctionExpression",
+                    ].includes(asNode(asNode(candidate.parent)?.parent)?.type ?? ""),
+            ))
     );
 }
 
@@ -192,6 +247,25 @@ export default createLayoutRule<Options>(
                     continue;
                 }
                 if (
+                    options.compactInitializations &&
+                    current === statements[2] &&
+                    isPreflightSetup(statements, sourceCode)
+                ) {
+                    const edit = editForPolicy(sourceCode, previous, current, "always");
+                    if (edit !== null)
+                        context.report({
+                            node: current,
+                            messageId: "unrelated",
+                            fix: editFix(edit),
+                        });
+                    continue;
+                }
+                if (
+                    options.compactRelatedSetup &&
+                    deferredGuardBoundary(statements, statements.indexOf(current), sourceCode)
+                )
+                    continue;
+                if (
                     compactStatementBoundary(
                         container,
                         statements,
@@ -200,6 +274,7 @@ export default createLayoutRule<Options>(
                         options,
                     )
                 ) {
+                    if (previous.type === "IfStatement" && current.type === "IfStatement") continue;
                     const edit = editForPolicy(sourceCode, previous, current, "never");
                     if (edit !== null)
                         context.report({ node: current, messageId: "related", fix: editFix(edit) });
@@ -248,7 +323,26 @@ export default createLayoutRule<Options>(
                     options.compactRelatedSetup &&
                     !tooMany &&
                     related &&
-                    cuddled.every((candidate) => isSingleLine(candidate, sourceCode.text));
+                    cuddled.every(
+                        (candidate) =>
+                            isSingleLine(candidate, sourceCode.text) &&
+                            options.allowConditionUsage &&
+                            (candidate !== previous ||
+                                bindingsFeedRegions(
+                                    candidate,
+                                    headerNodes(current),
+                                    sourceCode,
+                                    options.includeAssignments,
+                                    options.requireAllBindings,
+                                    "either",
+                                ) ||
+                                (options.includeAssignments &&
+                                    mutationFeedsRegions(
+                                        candidate,
+                                        headerNodes(current),
+                                        sourceCode,
+                                    ))),
+                    );
                 if (!tooMany && related && !compact) continue;
                 const edit = editForPolicy(
                     sourceCode,
