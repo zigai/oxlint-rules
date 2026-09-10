@@ -28,7 +28,7 @@ export default defineConfig({
 });
 ```
 
-_(For Effect projects, import `oxlint-rules/config/effect` instead of `oxlint-rules/config`.)_
+For Effect projects, import `oxlint-rules/config/effect` instead of `oxlint-rules/config`.
 
 Run Oxlint:
 
@@ -59,8 +59,6 @@ export default defineConfig({
   },
 });
 ```
-
-To enable individual rules without presets, register plugins directly via `jsPlugins: ["oxlint-rules", "oxlint-rules/blank-lines", "oxlint-rules/effect"]`. For rule options, configuration details, and examples, see [docs/antislop.md](docs/antislop.md) and [docs/blanklines.md](docs/blanklines.md).
 
 ## Rules
 
@@ -105,4 +103,4 @@ To enable individual rules without presets, register plugins directly via `jsPlu
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)
