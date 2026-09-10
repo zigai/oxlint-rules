@@ -70,7 +70,8 @@ const requiredPaths = [
     "dist/config/effect.js",
     "dist/config/index.js",
     "dist/index.js",
-    "docs/rules.md",
+    "docs/antislop.md",
+    "docs/blanklines.md",
 ];
 const missingPaths = requiredPaths.filter((path) => !paths.has(path));
 
