@@ -623,6 +623,8 @@ All options default to `true`:
 | `compactRelatedControlFlow`  | `true`  | Group adjacent guard clauses or loops that share condition bindings.                       |
 | `compactDestructuredSetup`   | `true`  | Group small destructuring setup sequences with their immediate consumer.                   |
 | `compactTryFinally`          | `true`  | Keep setup calls attached to a `try/finally` block when `finally` cleans up that resource. |
+| `compactAssertions`          | `true`  | Keep single-line assertions and abort checks compact with surrounding statements.          |
+| `compactSameReceiver`        | `true`  | Group single-line calls and declarations operating on the same receiver object.            |
 
 Related statements are grouped using their structure and binding references. Small setup-and-use sequences remain compact; distinct processing phases are separated.
 
