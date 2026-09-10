@@ -15,6 +15,7 @@ import {
 } from "../rule-utils.ts";
 import { anyStatementSelectorMatches, type StatementSelector } from "../selectors.ts";
 import type { AstNode, BlankLinePolicy, RuleContext } from "../types.ts";
+
 export type ExpressionKind =
     | "assignment"
     | "await"
@@ -92,17 +93,13 @@ function expressionKind(statement: AstNode): ExpressionKind | null {
     return expression === null ? null : expressionNodeKind(expression);
 }
 
-// A call that registers an independent behavior: one of its arguments is a
-// block-bodied closure with its own body. Telemetry payloads and other
-// expression-bodied closures stay attached to their step.
 function registersBehavior(statement: AstNode): boolean {
     const expression = asNode(statement.expression);
     if (expression?.type !== "CallExpression") return false;
     return nodeArray(expression.arguments).some((argument) => {
-        const callback = asNode(argument);
-        if (callback?.type !== "ArrowFunctionExpression" && callback?.type !== "FunctionExpression")
+        if (argument.type !== "ArrowFunctionExpression" && argument.type !== "FunctionExpression")
             return false;
-        return asNode(callback.body)?.type === "BlockStatement";
+        return asNode(argument.body)?.type === "BlockStatement";
     });
 }
 
@@ -201,16 +198,12 @@ export default createLayoutRule<Options>(
                 if ((previousSelected || currentSelected) && compact) {
                     policy = "never";
                 }
-                // An expression after a conditional starts a new phase, unless
-                // it continues a compact single-line update pair, filters a
-                // loop body, or belongs to a compact group the shared analysis
-                // already claimed (such as trailing local bookkeeping).
+                // Preserve compact updates, loop filters, and groups claimed by shared analysis.
                 if (currentSelected && previous.type === "IfStatement" && policy !== "never") {
                     const consequent = asNode(previous.consequent);
                     const continuesUpdate =
                         asNode(previous.alternate) === null &&
-                        consequent !== null &&
-                        consequent.type === "ExpressionStatement" &&
+                        consequent?.type === "ExpressionStatement" &&
                         isSingleLine(previous, sourceCode.text) &&
                         isSingleLine(current, sourceCode.text);
                     const continueFilter =
@@ -220,10 +213,7 @@ export default createLayoutRule<Options>(
                         policy = "always";
                     }
                 }
-                // Independent registrations separate: consecutive calls to the
-                // same target whose closures each have their own body are
-                // distinct behaviors. A setup step attached to its handler
-                // stays compact.
+                // Separate registrations with block-bodied handlers for the same target.
                 if (
                     previousSelected &&
                     currentSelected &&
@@ -234,9 +224,7 @@ export default createLayoutRule<Options>(
                 ) {
                     policy = "always";
                 }
-                // A substantial call step completes before the next call begins:
-                // consecutive calls stay compact only while the first fits on one
-                // line or the next call consumes the previous call's receiver.
+                // A multiline call stays attached when the next call consumes its receiver.
                 if (
                     previousSelected &&
                     currentSelected &&

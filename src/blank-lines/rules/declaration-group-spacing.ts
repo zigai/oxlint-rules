@@ -102,10 +102,6 @@ function variableInitializer(statement: AstNode | undefined): AstNode | null {
     return declarations.length === 1 ? asNode(declarations[0]?.init) : null;
 }
 
-// An empty object accumulator starts a construction phase: the fields it
-// collects are filled by the statements that follow, so it separates from the
-// extraction or conversion work above it. Sibling accumulators of the same
-// shape form one declaration unit.
 function isEmptyObjectAccumulator(statement: AstNode): boolean {
     const initializer = variableInitializer(statement);
     return (
@@ -113,10 +109,6 @@ function isEmptyObjectAccumulator(statement: AstNode): boolean {
     );
 }
 
-// A declaration consumed immediately by the next one stays with its group:
-// invoked directly for its result, assembled into the data the next one
-// builds, or captured by the next callback. Anything else beside a
-// substantial construction starts a new phase.
 function readsPreviousBinding(previous: AstNode, scope: AstNode, sourceCode: SourceCode): boolean {
     const declarations = nodeArray(unwrapExport(previous).declarations);
     if (declarations.length !== 1) return false;
@@ -149,18 +141,14 @@ function isCallbackUnit(previous: AstNode, current: AstNode, sourceCode: SourceC
             resolveBinding(callee, callee.name, sourceCode) === declared
         );
     }
-    // A callback that captures another callback is still its own phase: every
-    // callback-to-callback boundary in the corpus separates. Only assembling a
-    // value out of the previous declaration keeps it attached.
+    // Capturing a callback in another callback does not keep them together.
     return (
         currentInitializer.type === "ObjectExpression" &&
         readsPreviousBinding(previous, currentInitializer, sourceCode)
     );
 }
 
-// Does the initializer compute a value (as opposed to passing values through)?
-// A wrapped call whose arguments are computed reads as a phase of its own; a
-// wrapped call over literals/names is only a formatting artifact.
+// Distinguish computed arguments from calls wrapped only for formatting.
 function wrapsComputation(initializer: AstNode): boolean {
     if (initializer.type === "TSAsExpression" || initializer.type === "AsExpression") return true;
     if (initializer.type !== "CallExpression") return false;
@@ -181,14 +169,12 @@ function wrapsComputation(initializer: AstNode): boolean {
     });
 }
 
-// A vertically laid-out collection is a declaration unit of its own, whether it
-// is written as an array literal or as a constructor over one (`new Set([...])`).
 function verticalCollectionInitializer(initializer: AstNode | null, text: string): boolean {
     if (initializer === null) return false;
     if (initializer.type === "ArrayExpression") return !isSingleLine(initializer, text);
     if (initializer.type !== "NewExpression") return false;
     const arguments_ = nodeArray(initializer.arguments);
-    const collection = arguments_.length === 1 ? asNode(arguments_[0]) : null;
+    const collection = arguments_.length === 1 ? arguments_[0] : null;
     return collection?.type === "ArrayExpression" && !isSingleLine(collection, text);
 }
 
@@ -196,8 +182,7 @@ function isSubstantialConstruction(initializer: AstNode | null, text: string): b
     if (initializer === null || isSingleLine(initializer, text)) return false;
     if (initializer.type === "ConditionalExpression") return false;
     if (initializer.type === "CallExpression" || initializer.type === "NewExpression") {
-        // Type arguments alone do not make a construction substantial: an
-        // empty generic registry reads as one unit.
+        // Type arguments alone do not make a construction substantial.
         return nodeArray(initializer.arguments).some((argument) => !isSingleLine(argument, text));
     }
     return true;
@@ -226,10 +211,7 @@ function separatesVariableDeclarations(
     if (isEmptyObjectAccumulator(current) && !isEmptyObjectAccumulator(previous)) {
         return true;
     }
-    // A computed constant section ends before the simple constants that follow
-    // it: a wrapped declaration whose arguments compute something is a value of
-    // its own phase, while a declaration the formatter merely wrapped around a
-    // pass-through call stays attached to its neighbour.
+    // Separate computed module constants from the literals that follow.
     if (
         container.type === "Program" &&
         previousInitializer !== null &&
@@ -239,8 +221,7 @@ function separatesVariableDeclarations(
     ) {
         return true;
     }
-    // Separate allocated module resources from scalar accounting state, not
-    // ordinary constant keys followed by an enable flag or local setup.
+    // Separate module resources from mutable scalar state.
     if (
         container.type === "Program" &&
         previousDeclaration.kind === "const" &&
@@ -250,8 +231,6 @@ function separatesVariableDeclarations(
     ) {
         return true;
     }
-    // A vertically laid-out list is a declaration unit, unlike a wrapped call
-    // or a multiline type annotation on a scalar binding.
     if (
         verticalCollectionInitializer(previousInitializer, text) ||
         verticalCollectionInitializer(currentInitializer, text)
@@ -263,21 +242,12 @@ function separatesVariableDeclarations(
         asNode(currentInitializer.consequent)?.type === "ObjectExpression" &&
         asNode(currentInitializer.alternate)?.type === "ObjectExpression" &&
         !isSingleLine(currentInitializer, text) &&
-        // A choice assembled from the previous declaration is that declaration's
-        // consumer: corpus evidence separates only the independent ones
-        // (59/59 consuming choices stay compact).
         !readsPreviousBinding(previous, currentInitializer, sourceCode)
     ) {
         return true;
     }
-    // Independent substantial constructions form their own phases: at module
-    // scope every substantial construction is an independent unit, while
-    // inside a function only adjacent multiline callbacks separate. A
-    // multiline choice stays one selection, and an empty generic registry
-    // reads as one unit.
+    // Separate substantial constructions at module scope.
     if (
-        previousInitializer !== null &&
-        currentInitializer !== null &&
         isSubstantialConstruction(previousInitializer, text) &&
         isSubstantialConstruction(currentInitializer, text) &&
         container.type === "Program"
@@ -292,20 +262,16 @@ function separatesVariableDeclarations(
     ) {
         return true;
     }
-    // A scalar lead-in beside a substantial construction starts a new phase
-    // unless the construction reads it: tiny keys stay attached to the value
-    // they feed, while independent neighbors separate.
+    // Keep a scalar with a construction only when the construction references it.
     if (
-        previousInitializer !== null &&
+        previousInitializer?.type === "Literal" &&
         currentInitializer !== null &&
-        previousInitializer.type === "Literal" &&
         isSubstantialConstruction(currentInitializer, text) &&
         !readsPreviousBinding(previous, currentInitializer, sourceCode)
     ) {
         return true;
     }
-    // Function-expression peers form an implementation section. Small setup
-    // closures and a single installed wrapper do not create such a section.
+    // Separate function-expression groups while allowing small setup closures.
     if (currentInitializer?.type !== "FunctionExpression") return false;
     if (previousInitializer?.type === "FunctionExpression") {
         return !withinNodeBudget(previousInitializer) || !withinNodeBudget(currentInitializer);

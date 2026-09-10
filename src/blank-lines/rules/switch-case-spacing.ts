@@ -41,10 +41,6 @@ function isTerminating(statement: AstNode | undefined): boolean {
     return false;
 }
 
-// Does a switch produce structure anywhere in its cases? A switch over stored
-// values (a mapping table of literals, templates, and simple selections) is
-// compact on all 44 clause boundaries of the corpus; a switch whose cases call,
-// construct, or build values separates its substantial cases on all 75.
 const STRUCTURAL_NODES = new Set([
     "CallExpression",
     "NewExpression",
@@ -63,16 +59,6 @@ function producesStructure(node: AstNode): boolean {
     return structural;
 }
 
-function switchProducesStructure(cases: readonly AstNode[]): boolean {
-    return cases.some((clause) => producesStructure(clause));
-}
-
-// A case body is *substantial* when it produces or constructs a result rather
-// than handing back a stored value: a braced body, a construction, a returned
-// selection (`a ?? b`), or a bare return. A conditional return counts when it
-// spans lines or builds its branches. Corpus evidence: inside a switch that
-// produces structure, these separate on 75 of 75 clause boundaries, while
-// stacked labels, simple value returns and template returns stay compact.
 function isSubstantialCaseBody(caseNode: AstNode, sourceCode: SourceCode): boolean {
     const statements = caseConsequent(caseNode);
     const last = statements.at(-1);
@@ -128,7 +114,7 @@ export default createLayoutRule<Options>(
         return {
             SwitchStatement(node): void {
                 const clauses = switchCases(node);
-                const produces = switchProducesStructure(clauses);
+                const produces = clauses.some(producesStructure);
                 for (const [previous, current] of pairwise(clauses)) {
                     const consequent = caseConsequent(previous);
                     let policy: BlankLinePolicy;
@@ -137,8 +123,7 @@ export default createLayoutRule<Options>(
                     } else if (options.ignoreFallthrough && !isTerminating(consequent.at(-1))) {
                         policy = "any";
                     } else {
-                        // A value-mapping switch keeps every case short; a switch
-                        // that produces structure applies the long/short policy.
+                        // Value-mapping switches always use the short-case policy.
                         const longCase =
                             produces &&
                             (isSubstantialCaseBody(previous, sourceCode) ||

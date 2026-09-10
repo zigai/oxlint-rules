@@ -158,13 +158,8 @@ export default createLayoutRule<Options>(
                     continue;
                 }
                 if (lineSpan(container, sourceCode.text) < options.minContainerLines) continue;
-                // A result that returns an updated value ends the run with a
-                // boundary, even though lone guards cuddle with their exit:
-                // the update phase completes before the value is returned.
-                const exitIndex = statements.indexOf(current);
-                const update = statements[exitIndex - 1];
-                const updateMutation =
-                    update === undefined ? null : conditionalMutation(update, sourceCode);
+                // Separate an updated result even when guards are exempt.
+                const updateMutation = conditionalMutation(previous, sourceCode);
                 const returned = asNode(current.argument);
                 const updateTail =
                     updateMutation !== null &&

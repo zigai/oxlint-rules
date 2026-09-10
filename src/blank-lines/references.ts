@@ -205,9 +205,6 @@ export function callsUseSameTarget(left: AstNode, right: AstNode, sourceCode: So
     );
 }
 
-// A consumer continues the provider's step when it operates on the same
-// receiver or takes the provider's receiver as an argument (for example,
-// buffering rows and then storing the buffer).
 export function consumerUsesProviderReceiver(
     provider: AstNode,
     consumer: AstNode,
@@ -235,8 +232,9 @@ export function consumerUsesProviderReceiver(
         usesReceiver(asNode(consumedCallee.object))
     )
         return true;
-    return nodeArray(consumed.arguments).some((argument) => usesReceiver(argument));
+    return nodeArray(consumed.arguments).some(usesReceiver);
 }
+
 export function mutationPath(statement: AstNode, sourceCode: SourceCode): AccessPath | null {
     const expression = asNode(statement.expression);
     if (statement.type !== "ExpressionStatement" || expression === null) return null;
