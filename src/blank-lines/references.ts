@@ -104,7 +104,7 @@ export function bindingsFeedRegions(
     return requireAll ? used.every(feeds) : used.some(feeds);
 }
 
-interface AccessPath {
+export interface AccessPath {
     readonly root: ScopeVariable | AstNode;
     readonly properties: readonly (string | ScopeVariable)[];
 }
@@ -123,7 +123,7 @@ function receiverOwner(node: AstNode): AstNode {
     return owner;
 }
 
-function accessPath(node: AstNode | null, sourceCode: SourceCode): AccessPath | null {
+export function accessPath(node: AstNode | null, sourceCode: SourceCode): AccessPath | null {
     if (node === null) return null;
     if (node.type === "Identifier" && typeof node.name === "string") {
         const root = resolveBinding(node, node.name, sourceCode);
@@ -145,7 +145,7 @@ function accessPath(node: AstNode | null, sourceCode: SourceCode): AccessPath | 
     return key === null ? null : { root: object.root, properties: [...object.properties, key] };
 }
 
-function samePath(left: AccessPath, right: AccessPath): boolean {
+export function samePath(left: AccessPath, right: AccessPath): boolean {
     return (
         left.root === right.root &&
         left.properties.length === right.properties.length &&

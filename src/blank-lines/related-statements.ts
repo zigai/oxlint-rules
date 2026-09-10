@@ -8,7 +8,9 @@ import {
     walkAst,
 } from "./ast.ts";
 import {
+    accessPath,
     bindingsFeedRegions,
+    callsUseSameTarget,
     declarationInitializesMutation,
     directlyReferences,
     hasDeferredExecution,
@@ -16,8 +18,9 @@ import {
     mutationPath,
     resolveBinding,
     sameMutation,
+    samePath,
     shareReadBinding,
-    callsUseSameTarget,
+    type AccessPath,
 } from "./references.ts";
 import { rangeOf } from "./spacing.ts";
 import { declarationKind } from "./selectors.ts";
@@ -32,8 +35,9 @@ export interface StatementGroupingOptions {
     readonly compactRelatedControlFlow?: boolean;
     readonly compactDestructuredSetup?: boolean;
     readonly compactTryFinally?: boolean;
+    readonly compactAssertions?: boolean;
+    readonly compactSameReceiver?: boolean;
 }
-
 export const statementGroupingDefaults: Required<StatementGroupingOptions> = {
     compactShortBodies: true,
     compactInitializations: true,
@@ -43,8 +47,9 @@ export const statementGroupingDefaults: Required<StatementGroupingOptions> = {
     compactRelatedControlFlow: true,
     compactDestructuredSetup: true,
     compactTryFinally: true,
+    compactAssertions: true,
+    compactSameReceiver: true,
 };
-
 export const statementGroupingSchema = {
     compactShortBodies: { type: "boolean" },
     compactInitializations: { type: "boolean" },
@@ -54,6 +59,8 @@ export const statementGroupingSchema = {
     compactRelatedControlFlow: { type: "boolean" },
     compactDestructuredSetup: { type: "boolean" },
     compactTryFinally: { type: "boolean" },
+    compactAssertions: { type: "boolean" },
+    compactSameReceiver: { type: "boolean" },
 } as const;
 
 const LOOP_TYPES: ReadonlySet<string> = new Set([
@@ -773,12 +780,16 @@ function terminalAccountingBoundary(
 }
 
 function isInitialization(statement: AstNode, sourceCode: SourceCode): boolean {
-    const expression = asNode(statement.expression);
+    let expression = asNode(statement.expression);
+    if (expression?.type === "AwaitExpression") expression = asNode(expression.argument);
     return (
         isSimpleStatement(statement) &&
         (isSingleLineVariable(statement, sourceCode) ||
             expression?.type === "AssignmentExpression" ||
-            expression?.type === "UpdateExpression")
+            expression?.type === "UpdateExpression" ||
+            (expression?.type === "CallExpression" &&
+                nodeArray(expression.arguments).length === 0 &&
+                isSingleLine(statement, sourceCode.text)))
     );
 }
 
@@ -964,6 +975,122 @@ export function deferredGuardBoundary(
     return false;
 }
 
+function isAssertionStatement(statement: AstNode, sourceCode: SourceCode): boolean {
+    if (!isSingleLine(statement, sourceCode.text)) return false;
+    if (statement.type !== "ExpressionStatement") return false;
+    let expression = asNode(statement.expression);
+    if (expression === null) return false;
+    if (expression.type === "AwaitExpression") {
+        expression = asNode(expression.argument);
+    }
+    if (expression?.type === "ChainExpression") {
+        expression = asNode(expression.expression);
+    }
+    if (expression?.type !== "CallExpression") return false;
+    const callee = asNode(expression.callee);
+    if (callee === null) return false;
+    if (callee.type === "Identifier" && typeof callee.name === "string") {
+        return /^(?:throwIfAborted|assert|invariant|check|ensure)$/.test(callee.name);
+    }
+    if (callee.type === "MemberExpression" || callee.type === "OptionalMemberExpression") {
+        const property = asNode(callee.property);
+        if (
+            callee.computed !== true &&
+            property?.type === "Identifier" &&
+            typeof property.name === "string"
+        ) {
+            if (property.name === "throwIfAborted") return true;
+            const object = asNode(callee.object);
+            if (
+                object?.type === "Identifier" &&
+                typeof object.name === "string" &&
+                /^(?:assert|console)$/.test(object.name)
+            ) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+export function assertionBoundary(
+    previous: AstNode,
+    current: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    if (!isSingleLine(previous, sourceCode.text) || !isSingleLine(current, sourceCode.text)) {
+        return false;
+    }
+    const prevAssert = isAssertionStatement(previous, sourceCode);
+    const currAssert = isAssertionStatement(current, sourceCode);
+    if (!prevAssert && !currAssert) return false;
+    if (prevAssert && currAssert) return true;
+
+    const other = prevAssert ? current : previous;
+    return (
+        isSingleLineVariable(other, sourceCode) ||
+        other.type === "ExpressionStatement" ||
+        (prevAssert && other.type === "IfStatement" && isSingleLine(other, sourceCode.text))
+    );
+}
+
+function receiverPath(statement: AstNode, sourceCode: SourceCode): AccessPath | null {
+    let target = statement;
+    if (target.type === "ExpressionStatement") {
+        let expression = asNode(target.expression);
+        if (expression?.type === "AwaitExpression") expression = asNode(expression.argument);
+        if (expression?.type === "ChainExpression") expression = asNode(expression.expression);
+        if (expression?.type === "CallExpression") {
+            const callee = asNode(expression.callee);
+            if (
+                (callee?.type === "MemberExpression" ||
+                    callee?.type === "OptionalMemberExpression") &&
+                callee.computed !== true
+            ) {
+                return accessPath(asNode(callee.object), sourceCode);
+            }
+        }
+        const mutation = mutationPath(statement, sourceCode);
+        if (mutation !== null && mutation.properties.length > 0) {
+            return { root: mutation.root, properties: mutation.properties.slice(0, -1) };
+        }
+        return null;
+    }
+    const declaration = unwrapExport(target);
+    if (declaration.type === "VariableDeclaration") {
+        const declarations = nodeArray(declaration.declarations);
+        if (declarations.length !== 1) return null;
+        let init = asNode(declarations[0]?.init);
+        if (init?.type === "AwaitExpression") init = asNode(init.argument);
+        if (init?.type === "ChainExpression") init = asNode(init.expression);
+        if (init?.type === "CallExpression") {
+            const callee = asNode(init.callee);
+            if (
+                (callee?.type === "MemberExpression" ||
+                    callee?.type === "OptionalMemberExpression") &&
+                callee.computed !== true
+            ) {
+                return accessPath(asNode(callee.object), sourceCode);
+            }
+        }
+    }
+    return null;
+}
+
+export function sameReceiverBoundary(
+    previous: AstNode,
+    current: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    if (!isSingleLine(previous, sourceCode.text) || !isSingleLine(current, sourceCode.text)) {
+        return false;
+    }
+    const prevReceiver = receiverPath(previous, sourceCode);
+    const currReceiver = receiverPath(current, sourceCode);
+    if (prevReceiver === null || currReceiver === null) return false;
+    return samePath(prevReceiver, currReceiver);
+}
+
 // Keep a declaration attached only when it consumes the preceding write.
 export function startsDeclarationPhase(
     previous: AstNode,
@@ -972,7 +1099,16 @@ export function startsDeclarationPhase(
 ): boolean {
     if (previous.type !== "ExpressionStatement") return false;
     if (declarationKind(current) === null) return false;
+    if (isAssertionStatement(previous, sourceCode)) return false;
+    if (sameReceiverBoundary(previous, current, sourceCode)) return false;
     const expression = asNode(previous.expression);
+    if (
+        expression?.type === "CallExpression" &&
+        nodeArray(expression.arguments).length === 0 &&
+        isSingleLine(previous, sourceCode.text)
+    ) {
+        return false;
+    }
     const completedStep =
         expression?.type === "CallExpression" ||
         (expression?.type === "AssignmentExpression" && expression.operator === "=");
@@ -1070,7 +1206,10 @@ export function compactStatementBoundary(
         (options.compactWrappedDeclarations === true &&
             compactValueAliasStep(previous, current, sourceCode)) ||
         (options.compactConditionalUpdates === true &&
-            mutationBoundary(statements, index, sourceCode))
+            mutationBoundary(statements, index, sourceCode)) ||
+        (options.compactAssertions === true && assertionBoundary(previous, current, sourceCode)) ||
+        (options.compactSameReceiver === true &&
+            sameReceiverBoundary(previous, current, sourceCode))
     );
 }
 
@@ -1082,6 +1221,7 @@ export function isCompactExitPredecessor(
     if (!isSingleLine(previous, sourceCode.text)) return false;
     if (isSingleLineVariable(previous, sourceCode))
         return usesDeclaredBindings(previous, current, sourceCode);
+    if (isAssertionStatement(previous, sourceCode)) return true;
     if (previous.type !== "ExpressionStatement" || !isSmallExpressionTree(current)) return false;
     const expression = asNode(previous.expression);
     return expression?.type === "AssignmentExpression" || expression?.type === "UpdateExpression";
