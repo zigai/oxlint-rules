@@ -18,16 +18,98 @@ tester.run("blank-lines/blank-line-after-block", blankLineAfterBlock, {
         "function restore(target, value) {\n    if (value === undefined) {\n        delete target.slot;\n        return;\n    }\n    target.slot = value;\n}\n",
         "function restore(target, other, value) {\n    if (value === undefined) {\n        delete target.slot;\n        return;\n    }\n\n    other.slot = value;\n}\n",
         "function restore(target, key, otherKey, value) {\n    if (value === undefined) {\n        delete target[key];\n        return;\n    }\n\n    target[otherKey] = value;\n}\n",
-        "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        result.push(value);\n    }\n\n    return result;\n}\n",
-        "function total(values) {\n    let total = 0;\n    for (const value of values) {\n        total += value;\n    }\n\n    return total;\n}\n",
+        {
+            name: "preserves separation before returning an accumulated array",
+            code: `function collect(values) {
+    const result = [];
+    for (const value of values) {
+        result.push(value);
+    }
+
+    return result;
+}
+`,
+        },
+        {
+            name: "preserves separation before returning a scalar total",
+            code: `function total(values) {
+    let total = 0;
+    for (const value of values) {
+        total += value;
+    }
+
+    return total;
+}
+`,
+        },
         "function collect(values) {\n    const result = [];\n    for (const result of values) {\n        result.push(1);\n    }\n\n    return result;\n}\n",
         "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        schedule(() => result.push(value));\n    }\n\n    return result;\n}\n",
-        "function disable(state) {\n    if (state.active) {\n        restore(state.original);\n    }\n\n    return;\n}\n",
-        "function check(value) {\n    if (value.a === undefined) return false;\n    if (value.b === undefined) return false;\n    return true;\n}\n",
-        "function parse(value, state) {\n    if (value === undefined) return undefined;\n    if (state === undefined) return undefined;\n    return decode(value, state);\n}\n",
-        "function render(node, theme, context) {\n    if (node === undefined) return undefined;\n    if (node.hidden !== undefined && node.visible === undefined)\n        return undefined;\n    if (node.empty !== undefined && node.count === undefined)\n        return undefined;\n\n    return fallback(node, theme, context);\n}\n",
-        "function decode(source, state) {\n    let node = init(source);\n    if (source.text !== undefined) node = { ...node, text: source.text };\n    if (source.preview !== undefined)\n        node = { ...node, preview: decode(source.preview, state) };\n\n    return node;\n}\n",
-        "function match(item) {\n    if (!(item instanceof Item)) {\n        return false;\n    }\n\n    const lines = item.render(1);\n    return lines.length === 1;\n}\n",
+        {
+            name: "preserves separation before a bare return after a block",
+            code: `function disable(state) {
+    if (state.active) {
+        restore(state.original);
+    }
+
+    return;
+}
+`,
+        },
+        {
+            name: "keeps single-line boolean guards together",
+            code: `function check(value) {
+    if (value.a === undefined) return false;
+    if (value.b === undefined) return false;
+    return true;
+}
+`,
+        },
+        {
+            name: "keeps single-line value guards together",
+            code: `function parse(value, state) {
+    if (value === undefined) return undefined;
+    if (state === undefined) return undefined;
+    return decode(value, state);
+}
+`,
+        },
+        {
+            name: "keeps guards with wrapped conditions together",
+            code: `function render(node, theme, context) {
+    if (node === undefined) return undefined;
+    if (node.hidden !== undefined && node.visible === undefined)
+        return undefined;
+    if (node.empty !== undefined && node.count === undefined)
+        return undefined;
+
+    return fallback(node, theme, context);
+}
+`,
+        },
+        {
+            name: "allows a single-line update before a wrapped update",
+            code: `function decode(source, state) {
+    let node = init(source);
+    if (source.text !== undefined) node = { ...node, text: source.text };
+    if (source.preview !== undefined)
+        node = { ...node, preview: decode(source.preview, state) };
+
+    return node;
+}
+`,
+        },
+        {
+            name: "preserves separation between a narrowing guard and a declaration",
+            code: `function match(item) {
+    if (!(item instanceof Item)) {
+        return false;
+    }
+
+    const lines = item.render(1);
+    return lines.length === 1;
+}
+`,
+        },
         "while (ready) {\n    if (skip) {\n        work();\n    }\n    break;\n}\n",
         "while (ready) {\n    if (skip) {\n        work();\n    }\n    continue;\n}\n",
         `
@@ -48,8 +130,22 @@ tester.run("blank-lines/blank-line-after-block", blankLineAfterBlock, {
     ],
     invalid: [
         {
-            code: "function disable(state) {\n    if (state.active) {\n        restore(state.original);\n    }\n    return;\n}\n",
-            output: "function disable(state) {\n    if (state.active) {\n        restore(state.original);\n    }\n\n    return;\n}\n",
+            name: "separates a bare return from the preceding block",
+            code: `function disable(state) {
+    if (state.active) {
+        restore(state.original);
+    }
+    return;
+}
+`,
+            output: `function disable(state) {
+    if (state.active) {
+        restore(state.original);
+    }
+
+    return;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         ...[
@@ -74,8 +170,28 @@ tester.run("blank-lines/blank-line-after-block", blankLineAfterBlock, {
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function account(input) {\n    let success = 0;\n    let failure = 0;\n    if (input.ready) {\n        success += 1;\n        return;\n    }\n\n    failure += 1;\n}\n",
-            output: "function account(input) {\n    let success = 0;\n    let failure = 0;\n    if (input.ready) {\n        success += 1;\n        return;\n    }\n    failure += 1;\n}\n",
+            name: "keeps local failure accounting with the success branch",
+            code: `function account(input) {
+    let success = 0;
+    let failure = 0;
+    if (input.ready) {
+        success += 1;
+        return;
+    }
+
+    failure += 1;
+}
+`,
+            output: `function account(input) {
+    let success = 0;
+    let failure = 0;
+    if (input.ready) {
+        success += 1;
+        return;
+    }
+    failure += 1;
+}
+`,
             errors: [{ messageId: "unexpectedBlank" }],
         },
         {
@@ -94,33 +210,153 @@ tester.run("blank-lines/blank-line-after-block", blankLineAfterBlock, {
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function choose(item) {\n    if (primary(item)) {\n        return true;\n    }\n    if (secondary(item)) {\n        return false;\n    }\n\n    return fallback(item);\n}\n",
-            output: "function choose(item) {\n    if (primary(item)) {\n        return true;\n    }\n\n    if (secondary(item)) {\n        return false;\n    }\n\n    return fallback(item);\n}\n",
+            name: "separates braced boolean guards",
+            code: `function choose(item) {
+    if (primary(item)) {
+        return true;
+    }
+    if (secondary(item)) {
+        return false;
+    }
+
+    return fallback(item);
+}
+`,
+            output: `function choose(item) {
+    if (primary(item)) {
+        return true;
+    }
+
+    if (secondary(item)) {
+        return false;
+    }
+
+    return fallback(item);
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
-            output: "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
+            name: "separates braced property updates",
+            code: `function configure(target, input) {
+    if (input.first) {
+        target.first = input.first;
+    }
+    if (input.second) {
+        target.second = input.second;
+    }
+}
+`,
+            output: `function configure(target, input) {
+    if (input.first) {
+        target.first = input.first;
+    }
+
+    if (input.second) {
+        target.second = input.second;
+    }
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function build(input) {\n    let result = {};\n    if (input.first) {\n        result = { ...result, first: input.first };\n    }\n    if (input.second) {\n        result = { ...result, second: input.second };\n    }\n\n    return result;\n}\n",
-            output: "function build(input) {\n    let result = {};\n    if (input.first) {\n        result = { ...result, first: input.first };\n    }\n\n    if (input.second) {\n        result = { ...result, second: input.second };\n    }\n\n    return result;\n}\n",
+            name: "separates braced object reconstructions",
+            code: `function build(input) {
+    let result = {};
+    if (input.first) {
+        result = { ...result, first: input.first };
+    }
+    if (input.second) {
+        result = { ...result, second: input.second };
+    }
+
+    return result;
+}
+`,
+            output: `function build(input) {
+    let result = {};
+    if (input.first) {
+        result = { ...result, first: input.first };
+    }
+
+    if (input.second) {
+        result = { ...result, second: input.second };
+    }
+
+    return result;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function decode(source, state) {\n    let node = init(source);\n    if (source.body !== undefined)\n        node = { ...node, body: decode(source.body, state) };\n    if (source.preview !== undefined)\n        node = { ...node, preview: decode(source.preview, state) };\n    return node;\n}\n",
-            output: "function decode(source, state) {\n    let node = init(source);\n    if (source.body !== undefined)\n        node = { ...node, body: decode(source.body, state) };\n\n    if (source.preview !== undefined)\n        node = { ...node, preview: decode(source.preview, state) };\n\n    return node;\n}\n",
+            name: "separates wrapped object updates and their result",
+            code: `function decode(source, state) {
+    let node = init(source);
+    if (source.body !== undefined)
+        node = { ...node, body: decode(source.body, state) };
+    if (source.preview !== undefined)
+        node = { ...node, preview: decode(source.preview, state) };
+    return node;
+}
+`,
+            output: `function decode(source, state) {
+    let node = init(source);
+    if (source.body !== undefined)
+        node = { ...node, body: decode(source.body, state) };
+
+    if (source.preview !== undefined)
+        node = { ...node, preview: decode(source.preview, state) };
+
+    return node;
+}
+`,
             errors: [{ messageId: "expectedBlank" }, { messageId: "expectedBlank" }],
         },
         {
-            code: "function decodePreview(value, state) {\n    const preview = capture(value, state);\n    if (preview.collapsed !== undefined)\n        preview.collapsed = Math.trunc(preview.collapsed);\n    if (preview.expanded !== undefined)\n        preview.expanded = Math.trunc(preview.expanded);\n    return preview;\n}\n",
-            output: "function decodePreview(value, state) {\n    const preview = capture(value, state);\n    if (preview.collapsed !== undefined)\n        preview.collapsed = Math.trunc(preview.collapsed);\n\n    if (preview.expanded !== undefined)\n        preview.expanded = Math.trunc(preview.expanded);\n\n    return preview;\n}\n",
+            name: "separates wrapped property updates and their result",
+            code: `function decodePreview(value, state) {
+    const preview = capture(value, state);
+    if (preview.collapsed !== undefined)
+        preview.collapsed = Math.trunc(preview.collapsed);
+    if (preview.expanded !== undefined)
+        preview.expanded = Math.trunc(preview.expanded);
+    return preview;
+}
+`,
+            output: `function decodePreview(value, state) {
+    const preview = capture(value, state);
+    if (preview.collapsed !== undefined)
+        preview.collapsed = Math.trunc(preview.collapsed);
+
+    if (preview.expanded !== undefined)
+        preview.expanded = Math.trunc(preview.expanded);
+
+    return preview;
+}
+`,
             errors: [{ messageId: "expectedBlank" }, { messageId: "expectedBlank" }],
         },
         {
-            code: "function configure(enabled, prototype, existingState) {\n    if (!enabled) {\n        if (existingState !== undefined) {\n            restore(prototype, existingState);\n        }\n        return;\n    }\n}\n",
-            output: "function configure(enabled, prototype, existingState) {\n    if (!enabled) {\n        if (existingState !== undefined) {\n            restore(prototype, existingState);\n        }\n\n        return;\n    }\n}\n",
+            name: "separates a bare return from nested cleanup",
+            code: `function configure(enabled, prototype, existingState) {
+    if (!enabled) {
+        if (existingState !== undefined) {
+            restore(prototype, existingState);
+        }
+        return;
+    }
+}
+`,
+            output: `function configure(enabled, prototype, existingState) {
+    if (!enabled) {
+        if (existingState !== undefined) {
+            restore(prototype, existingState);
+        }
+
+        return;
+    }
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
     ],

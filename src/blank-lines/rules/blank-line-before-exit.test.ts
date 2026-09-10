@@ -6,7 +6,14 @@ const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" }
 tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
     valid: [
         "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n\n    return () => combine(first, last);\n}\n",
-        "function render(item, fallback) {\n    if (item === undefined) return fallback;\n    return transform(item);\n}\n",
+        {
+            name: "allows a return immediately after a single-line guard",
+            code: `function render(item, fallback) {
+    if (item === undefined) return fallback;
+    return transform(item);
+}
+`,
+        },
         "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n    return (first) => combine(first, last);\n}\n",
         "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n    return () => combine(() => first, last);\n}\n",
         "function factory() {\n    const first = load();\n    consume(first);\n    const last = load();\n    return () => combine(first, last);\n}\n",
@@ -19,11 +26,55 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
             ([initializer, operation]) =>
                 `function collect(values) {\n    const result = ${initializer};\n    for (const value of values) {\n        ${operation};\n    }\n\n    return result;\n}\n`,
         ),
-        "function total(values) {\n    let total = 0;\n    for (const value of values) {\n        total += value;\n    }\n\n    return total;\n}\n",
-        "function collect(groups) {\n    const result = [];\n    for (const group of groups) {\n        for (const value of group) {\n            result.push(value);\n        }\n    }\n\n    return result;\n}\n",
-        // The rule abstains here: a bare return after a block is spaced by the after-block rule.
-        "function disable(state) {\n    if (state.active) {\n        restore(state.original);\n    }\n\n    return;\n}\n",
-        "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        result.push(value);\n    }\n\n    return result;\n}\n",
+        {
+            name: "preserves separation before returning a scalar accumulator",
+            code: `function total(values) {
+    let total = 0;
+    for (const value of values) {
+        total += value;
+    }
+
+    return total;
+}
+`,
+        },
+        {
+            name: "preserves separation before returning nested-loop results",
+            code: `function collect(groups) {
+    const result = [];
+    for (const group of groups) {
+        for (const value of group) {
+            result.push(value);
+        }
+    }
+
+    return result;
+}
+`,
+        },
+        {
+            name: "leaves bare-return spacing after a guard to the after-block rule",
+            code: `function disable(state) {
+    if (state.active) {
+        restore(state.original);
+    }
+
+    return;
+}
+`,
+        },
+        {
+            name: "preserves separation before returning collected values",
+            code: `function collect(values) {
+    const result = [];
+    for (const value of values) {
+        result.push(value);
+    }
+
+    return result;
+}
+`,
+        },
         "function collect(values, Set) {\n    const result = new Set();\n    for (const value of values) {\n        result.add(value);\n    }\n\n    return result;\n}\n",
         "function collect(values) {\n    let result = [];\n    result = load();\n    for (const value of values) {\n        result.push(value);\n    }\n\n    return result;\n}\n",
         "function collect(values) {\n    const result = [];\n    for (const value of values) {\n        if (!value.ready) continue;\n        result.push(value);\n    }\n\n    return result;\n}\n",
@@ -88,8 +139,26 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
                 work();
             }
         `,
-        "function take(captured, schema) {\n    const checked = check(schema, captured);\n    const extra = loadExtra(checked);\n    if (!checked) return reject();\n    return captured;\n}\n",
-        'function shouldCache(toolName) {\n    const normalized = normalize(toolName);\n    const extra = loadExtra(normalized);\n    if (normalized === "apply_patch") return false;\n    return normalized !== "edit";\n}\n',
+        {
+            name: "allows a captured result after a guard with intervening setup",
+            code: `function take(captured, schema) {
+    const checked = check(schema, captured);
+    const extra = loadExtra(checked);
+    if (!checked) return reject();
+    return captured;
+}
+`,
+        },
+        {
+            name: "allows a computed result after a guard with intervening setup",
+            code: `function shouldCache(toolName) {
+    const normalized = normalize(toolName);
+    const extra = loadExtra(normalized);
+    if (normalized === "apply_patch") return false;
+    return normalized !== "edit";
+}
+`,
+        },
     ],
     invalid: [
         ...[
@@ -97,13 +166,45 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
             ["new Set()", "result.add(value)"],
             ["new Map()", "result.set(value.key, value)"],
         ].map(([initializer, operation]) => ({
-            code: `function collect(values) {\n    const result = ${initializer};\n    for (const value of values) {\n        ${operation};\n    }\n    return result;\n}\n`,
-            output: `function collect(values) {\n    const result = ${initializer};\n    for (const value of values) {\n        ${operation};\n    }\n\n    return result;\n}\n`,
+            name: `separates a ${initializer} accumulation loop from its return`,
+            code: `function collect(values) {
+    const result = ${initializer};
+    for (const value of values) {
+        ${operation};
+    }
+    return result;
+}
+`,
+            output: `function collect(values) {
+    const result = ${initializer};
+    for (const value of values) {
+        ${operation};
+    }
+
+    return result;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         })),
         {
-            code: "function total(values) {\n    let total = 0;\n    for (const value of values) {\n        total += value;\n    }\n    return total;\n}\n",
-            output: "function total(values) {\n    let total = 0;\n    for (const value of values) {\n        total += value;\n    }\n\n    return total;\n}\n",
+            name: "separates a scalar accumulation loop from its return",
+            code: `function total(values) {
+    let total = 0;
+    for (const value of values) {
+        total += value;
+    }
+    return total;
+}
+`,
+            output: `function total(values) {
+    let total = 0;
+    for (const value of values) {
+        total += value;
+    }
+
+    return total;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
@@ -112,8 +213,20 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function factory() {\n    const unused = load();\n    const value = load();\n\n    return () => consume(value);\n}\n",
-            output: "function factory() {\n    const unused = load();\n    const value = load();\n    return () => consume(value);\n}\n",
+            name: "keeps a returned closure with the binding it captures",
+            code: `function factory() {
+    const unused = load();
+    const value = load();
+
+    return () => consume(value);
+}
+`,
+            output: `function factory() {
+    const unused = load();
+    const value = load();
+    return () => consume(value);
+}
+`,
             errors: [{ messageId: "unexpectedBlank" }],
         },
         {
@@ -122,8 +235,26 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
             errors: [{ messageId: "unexpectedBlank" }],
         },
         {
-            code: "function reset(state) {\n    state.enabled = false;\n    state.options = undefined;\n    clear();\n    state.cache = new Map();\n    state.cache.clear();\n\n    return;\n}\n",
-            output: "function reset(state) {\n    state.enabled = false;\n    state.options = undefined;\n    clear();\n    state.cache = new Map();\n    state.cache.clear();\n    return;\n}\n",
+            name: "keeps a bare return with straight-line cleanup",
+            code: `function reset(state) {
+    state.enabled = false;
+    state.options = undefined;
+    clear();
+    state.cache = new Map();
+    state.cache.clear();
+
+    return;
+}
+`,
+            output: `function reset(state) {
+    state.enabled = false;
+    state.options = undefined;
+    clear();
+    state.cache = new Map();
+    state.cache.clear();
+    return;
+}
+`,
             errors: [{ messageId: "unexpectedBlank" }],
         },
         {
@@ -181,18 +312,60 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function preview(record, action) {\n    if (record.path !== undefined) action = { ...action, path: record.path };\n    if (record.limit !== undefined) action = { ...action, limit: record.limit };\n    return action;\n}\n",
-            output: "function preview(record, action) {\n    if (record.path !== undefined) action = { ...action, path: record.path };\n    if (record.limit !== undefined) action = { ...action, limit: record.limit };\n\n    return action;\n}\n",
+            name: "separates a returned value from conditional updates",
+            code: `function preview(record, action) {
+    if (record.path !== undefined) action = { ...action, path: record.path };
+    if (record.limit !== undefined) action = { ...action, limit: record.limit };
+    return action;
+}
+`,
+            output: `function preview(record, action) {
+    if (record.path !== undefined) action = { ...action, path: record.path };
+    if (record.limit !== undefined) action = { ...action, limit: record.limit };
+
+    return action;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function size(lines) {\n    let bytes = 0;\n    for (const line of lines) {\n        bytes += Buffer.byteLength(line);\n    }\n    return bytes;\n}\n",
-            output: "function size(lines) {\n    let bytes = 0;\n    for (const line of lines) {\n        bytes += Buffer.byteLength(line);\n    }\n\n    return bytes;\n}\n",
+            name: "separates a derived total from its accumulation loop",
+            code: `function size(lines) {
+    let bytes = 0;
+    for (const line of lines) {
+        bytes += Buffer.byteLength(line);
+    }
+    return bytes;
+}
+`,
+            output: `function size(lines) {
+    let bytes = 0;
+    for (const line of lines) {
+        bytes += Buffer.byteLength(line);
+    }
+
+    return bytes;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: 'function header(server) {\n    const prefix = loadPrefix();\n    const suffix = loadSuffix(prefix);\n    if (server !== undefined) return { label: "Status", body: server };\n    return { label: "Status", body: undefined };\n}\n',
-            output: 'function header(server) {\n    const prefix = loadPrefix();\n    const suffix = loadSuffix(prefix);\n    if (server !== undefined) return { label: "Status", body: server };\n\n    return { label: "Status", body: undefined };\n}\n',
+            name: "separates a constructed fallback from a single-line guard",
+            code: `function header(server) {
+    const prefix = loadPrefix();
+    const suffix = loadSuffix(prefix);
+    if (server !== undefined) return { label: "Status", body: server };
+    return { label: "Status", body: undefined };
+}
+`,
+            output: `function header(server) {
+    const prefix = loadPrefix();
+    const suffix = loadSuffix(prefix);
+    if (server !== undefined) return { label: "Status", body: server };
+
+    return { label: "Status", body: undefined };
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
     ],

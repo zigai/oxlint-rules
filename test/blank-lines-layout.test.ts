@@ -8,8 +8,35 @@ import { recommendedConfig } from "../src/config/blank-lines.ts";
 const fixtures = [
     {
         name: "destructured-setup.ts",
-        input: "function decode(source, remaining) {\n    prepare();\n\n    const { values: rows, length: rowCount } = collection(source);\n\n    remaining -= rowCount;\n\n    const lines = [];\n    for (let row = 0; row < rowCount; row++) {\n        lines.push(rows[row]);\n    }\n\n    finish(lines, remaining);\n}\n",
-        output: "function decode(source, remaining) {\n    prepare();\n\n    const { values: rows, length: rowCount } = collection(source);\n    remaining -= rowCount;\n\n    const lines = [];\n    for (let row = 0; row < rowCount; row++) {\n        lines.push(rows[row]);\n    }\n\n    finish(lines, remaining);\n}\n",
+        input: `function decode(source, remaining) {
+    prepare();
+
+    const { values: rows, length: rowCount } = collection(source);
+
+    remaining -= rowCount;
+
+    const lines = [];
+    for (let row = 0; row < rowCount; row++) {
+        lines.push(rows[row]);
+    }
+
+    finish(lines, remaining);
+}
+`,
+        output: `function decode(source, remaining) {
+    prepare();
+
+    const { values: rows, length: rowCount } = collection(source);
+    remaining -= rowCount;
+
+    const lines = [];
+    for (let row = 0; row < rowCount; row++) {
+        lines.push(rows[row]);
+    }
+
+    finish(lines, remaining);
+}
+`,
     },
     {
         name: "destructured-setup.test.ts",
@@ -56,8 +83,23 @@ const fixtures = [
     },
     {
         name: "long-return-boundary.ts",
-        input: "function format(output) {\n    const formatted = normalizeCode(output);\n    if (formatted.trim().length === 0) return undefined;\n    remember(cacheKey, formatted);\n\n    return formatted;\n}\n",
-        output: "function format(output) {\n    const formatted = normalizeCode(output);\n    if (formatted.trim().length === 0) return undefined;\n\n    remember(cacheKey, formatted);\n\n    return formatted;\n}\n",
+        input: `function format(output) {
+    const formatted = normalizeCode(output);
+    if (formatted.trim().length === 0) return undefined;
+    remember(cacheKey, formatted);
+
+    return formatted;
+}
+`,
+        output: `function format(output) {
+    const formatted = normalizeCode(output);
+    if (formatted.trim().length === 0) return undefined;
+
+    remember(cacheKey, formatted);
+
+    return formatted;
+}
+`,
     },
     {
         name: "tiny-return-boundary.ts",
@@ -143,7 +185,21 @@ const fixtures = [
     },
     {
         name: "switch-cases.ts",
-        input: "function select(value) {\n    switch (value) {\n        case 1: {\n            const item = read();\n            return process(item);\n        }\n\n        case 2:\n            return fallback();\n\n        default:\n            return undefined;\n    }\n}\n",
+        input: `function select(value) {
+    switch (value) {
+        case 1: {
+            const item = read();
+            return process(item);
+        }
+
+        case 2:
+            return fallback();
+
+        default:
+            return undefined;
+    }
+}
+`,
     },
     {
         name: "scoped-key.ts",
@@ -231,8 +287,39 @@ const fixtures = [
     },
     {
         name: "object-updates.ts",
-        input: "function build(source) {\n    let result = {};\n\n    if (source.title) {\n        result = { ...result, title: source.title };\n    }\n\n    result = { ...result, enabled: true };\n\n    const preview = source.preview;\n\n    if (preview) {\n        result = { ...result, preview };\n    }\n\n    return result;\n}\n",
-        output: "function build(source) {\n    let result = {};\n    if (source.title) {\n        result = { ...result, title: source.title };\n    }\n    result = { ...result, enabled: true };\n\n    const preview = source.preview;\n    if (preview) {\n        result = { ...result, preview };\n    }\n\n    return result;\n}\n",
+        input: `function build(source) {
+    let result = {};
+
+    if (source.title) {
+        result = { ...result, title: source.title };
+    }
+
+    result = { ...result, enabled: true };
+
+    const preview = source.preview;
+
+    if (preview) {
+        result = { ...result, preview };
+    }
+
+    return result;
+}
+`,
+        output: `function build(source) {
+    let result = {};
+    if (source.title) {
+        result = { ...result, title: source.title };
+    }
+    result = { ...result, enabled: true };
+
+    const preview = source.preview;
+    if (preview) {
+        result = { ...result, preview };
+    }
+
+    return result;
+}
+`,
     },
     {
         name: "callback-boundary.ts",
@@ -254,8 +341,29 @@ const fixtures = [
     },
     {
         name: "initialization.ts",
-        input: "function tokenize(text) {\n    const tokens = [];\n\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n\n    return tokens;\n}\n",
-        output: "function tokenize(text) {\n    const tokens = [];\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n\n    return tokens;\n}\n",
+        input: `function tokenize(text) {
+    const tokens = [];
+
+    pattern.lastIndex = 0;
+
+    for (const match of text.matchAll(pattern)) {
+        tokens.push(match);
+    }
+
+    return tokens;
+}
+`,
+        output: `function tokenize(text) {
+    const tokens = [];
+    pattern.lastIndex = 0;
+
+    for (const match of text.matchAll(pattern)) {
+        tokens.push(match);
+    }
+
+    return tokens;
+}
+`,
     },
     {
         name: "multiline-declarations.ts",
@@ -290,8 +398,25 @@ const fixtures = [
     },
     {
         name: "local-arguments.ts",
-        input: "function inspect() {\n    if (arguments.length > 1) {\n        first();\n    }\n    if (arguments[0]) {\n        second();\n    }\n}\n",
-        output: "function inspect() {\n    if (arguments.length > 1) {\n        first();\n    }\n\n    if (arguments[0]) {\n        second();\n    }\n}\n",
+        input: `function inspect() {
+    if (arguments.length > 1) {
+        first();
+    }
+    if (arguments[0]) {
+        second();
+    }
+}
+`,
+        output: `function inspect() {
+    if (arguments.length > 1) {
+        first();
+    }
+
+    if (arguments[0]) {
+        second();
+    }
+}
+`,
     },
     {
         name: "asserted-alias-guard.ts",

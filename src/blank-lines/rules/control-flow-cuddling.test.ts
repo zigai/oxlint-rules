@@ -37,25 +37,83 @@ tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
         "let ready;\nlet unrelated = read();\nready = check();\nif (ready) {\n    run();\n}\n",
         "const ready = check();\nif (ready) {\n    run();\n}\n",
         "const start = getStart();\nfor (let i = start; i < 10; i++) {\n    visit(i);\n}\n",
-        "const render = (item) => format(item);\nfor (const item of items) {\n    print(render(item));\n}\n",
-        "const rows = [];\nfor (const row of source) {\n    rows.push(row);\n}\n",
+        {
+            name: "keeps an expression-bodied callback with its consuming loop",
+            code: `const render = (item) => format(item);
+for (const item of items) {
+    print(render(item));
+}
+`,
+        },
+        {
+            name: "keeps an empty collection with the loop that fills it",
+            code: `const rows = [];
+for (const row of source) {
+    rows.push(row);
+}
+`,
+        },
         "const result = load();\nif (enabled) {\n    consume(result);\n}\n",
         "const value = read();\n\nif (other) {\n    run();\n}\n",
         // Consecutive compact single-line loops are one traversal unit.
-        'function kinds(content, push) {\n    for (let index = 0; index < content.deletions; index += 1) push("delete");\n    for (let index = 0; index < content.additions; index += 1) push("insert");\n}\n',
-        "function counts(rows) {\n    while (rows[start]) rows[start].used = true;\n    while (rows[end]) rows[end].used = false;\n}\n",
+        {
+            name: "allows adjacent single-line for loops",
+            code: `function kinds(content, push) {
+    for (let index = 0; index < content.deletions; index += 1) push("delete");
+    for (let index = 0; index < content.additions; index += 1) push("insert");
+}
+`,
+        },
+        {
+            name: "allows adjacent single-line while loops",
+            code: `function counts(rows) {
+    while (rows[start]) rows[start].used = true;
+    while (rows[end]) rows[end].used = false;
+}
+`,
+        },
     ],
     invalid: [
         {
-            code: "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n    if (redraw) {\n        editor.render();\n    }\n}\n",
-            output: "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n\n    if (redraw) {\n        editor.render();\n    }\n}\n",
+            name: "separates a guard from an intervening call",
+            code: `function clear(editor) {
+    const redraw = editor.visible;
+    clearUi();
+    if (redraw) {
+        editor.render();
+    }
+}
+`,
+            output: `function clear(editor) {
+    const redraw = editor.visible;
+    clearUi();
+
+    if (redraw) {
+        editor.render();
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
+            name: "keeps a guard with its immediate setup after a call",
             // A guard that reads the setup binding stays with it: the blank
             // belongs after the completed step above, not before the guard.
-            code: "function run(input) {\n    release(input);\n    const size = measure(input);\n\n    if (size > limit) return;\n    consume(input);\n}\n",
-            output: "function run(input) {\n    release(input);\n    const size = measure(input);\n    if (size > limit) return;\n    consume(input);\n}\n",
+            code: `function run(input) {
+    release(input);
+    const size = measure(input);
+
+    if (size > limit) return;
+    consume(input);
+}
+`,
+            output: `function run(input) {
+    release(input);
+    const size = measure(input);
+    if (size > limit) return;
+    consume(input);
+}
+`,
             errors: [{ messageId: "related" }],
         },
         {
@@ -127,58 +185,254 @@ tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
             errors: [{ messageId: "tooMany" }],
         },
         {
-            code: "function inspect() {\n    if (arguments[0]) {\n        acceptFirst();\n    }\n    if (arguments[1]) {\n        acceptSecond();\n    }\n}\n",
-            output: "function inspect() {\n    if (arguments[0]) {\n        acceptFirst();\n    }\n\n    if (arguments[1]) {\n        acceptSecond();\n    }\n}\n",
+            name: "separates braced guards reading arguments",
+            code: `function inspect() {
+    if (arguments[0]) {
+        acceptFirst();
+    }
+    if (arguments[1]) {
+        acceptSecond();
+    }
+}
+`,
+            output: `function inspect() {
+    if (arguments[0]) {
+        acceptFirst();
+    }
+
+    if (arguments[1]) {
+        acceptSecond();
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
-            code: "function inspect() {\n    return () => {\n        if (arguments[0]) {\n            acceptFirst();\n        }\n        if (arguments[1]) {\n            acceptSecond();\n        }\n    };\n}\n",
-            output: "function inspect() {\n    return () => {\n        if (arguments[0]) {\n            acceptFirst();\n        }\n\n        if (arguments[1]) {\n            acceptSecond();\n        }\n    };\n}\n",
+            name: "separates braced guards reading captured arguments",
+            code: `function inspect() {
+    return () => {
+        if (arguments[0]) {
+            acceptFirst();
+        }
+        if (arguments[1]) {
+            acceptSecond();
+        }
+    };
+}
+`,
+            output: `function inspect() {
+    return () => {
+        if (arguments[0]) {
+            acceptFirst();
+        }
+
+        if (arguments[1]) {
+            acceptSecond();
+        }
+    };
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
-            code: "function configure(target, first, second, undefined) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
-            output: "function configure(target, first, second, undefined) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
+            name: "separates braced updates comparing a shadowed undefined",
+            code: `function configure(target, first, second, undefined) {
+    if (first !== undefined) {
+        target.first = first;
+    }
+    if (second !== undefined) {
+        target.second = second;
+    }
+}
+`,
+            output: `function configure(target, first, second, undefined) {
+    if (first !== undefined) {
+        target.first = first;
+    }
+
+    if (second !== undefined) {
+        target.second = second;
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
-            code: "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
-            output: "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
+            name: "separates braced updates reading the same input",
+            code: `function configure(target, input) {
+    if (input.first) {
+        target.first = input.first;
+    }
+    if (input.second) {
+        target.second = input.second;
+    }
+}
+`,
+            output: `function configure(target, input) {
+    if (input.first) {
+        target.first = input.first;
+    }
+
+    if (input.second) {
+        target.second = input.second;
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
+            name: "separates braced guards comparing a declared sentinel",
             languageOptions: { sourceType: "script" },
-            code: "declare const sentinel: unknown;\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
-            output: "declare const sentinel: unknown;\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+            code: `declare const sentinel: unknown;
+function configure(target, first, second) {
+    if (first !== sentinel) {
+        target.first = first;
+    }
+    if (second !== sentinel) {
+        target.second = second;
+    }
+}
+`,
+            output: `declare const sentinel: unknown;
+function configure(target, first, second) {
+    if (first !== sentinel) {
+        target.first = first;
+    }
+
+    if (second !== sentinel) {
+        target.second = second;
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
+            name: "separates braced guards comparing a function sentinel",
             languageOptions: { sourceType: "script" },
-            code: "function sentinel() {}\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
-            output: "function sentinel() {}\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+            code: `function sentinel() {}
+function configure(target, first, second) {
+    if (first !== sentinel) {
+        target.first = first;
+    }
+    if (second !== sentinel) {
+        target.second = second;
+    }
+}
+`,
+            output: `function sentinel() {}
+function configure(target, first, second) {
+    if (first !== sentinel) {
+        target.first = first;
+    }
+
+    if (second !== sentinel) {
+        target.second = second;
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
+            name: "separates braced guards comparing a reassigned sentinel",
             languageOptions: { globals: { sentinel: "writable" } },
-            code: "function update(value) {\n    sentinel = value;\n}\nfunction configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
-            output: "function update(value) {\n    sentinel = value;\n}\nfunction configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
+            code: `function update(value) {
+    sentinel = value;
+}
+function configure(first, second) {
+    if (first !== sentinel) {
+        acceptFirst();
+    }
+    if (second !== sentinel) {
+        acceptSecond();
+    }
+}
+`,
+            output: `function update(value) {
+    sentinel = value;
+}
+function configure(first, second) {
+    if (first !== sentinel) {
+        acceptFirst();
+    }
+
+    if (second !== sentinel) {
+        acceptSecond();
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
-            code: "function renderAll(items) {\n    const render = (item) => {\n        const line = format(item);\n        return prefix + line;\n    };\n    for (const item of items) {\n        print(render(item));\n    }\n}\n",
-            output: "function renderAll(items) {\n    const render = (item) => {\n        const line = format(item);\n        return prefix + line;\n    };\n\n    for (const item of items) {\n        print(render(item));\n    }\n}\n",
+            name: "separates a multiline callback from its consuming loop",
+            code: `function renderAll(items) {
+    const render = (item) => {
+        const line = format(item);
+        return prefix + line;
+    };
+    for (const item of items) {
+        print(render(item));
+    }
+}
+`,
+            output: `function renderAll(items) {
+    const render = (item) => {
+        const line = format(item);
+        return prefix + line;
+    };
+
+    for (const item of items) {
+        print(render(item));
+    }
+}
+`,
             errors: [{ messageId: "callbackPhase" }],
         },
         {
+            name: "separates multiline while scans over the same collection",
             // Two multiline scans over the same state are separate passes
             // (forward trim, backward trim), unlike the single-line pair above.
-            code: 'function trim(rows) {\n    while (rows[start] === "") {\n        start += 1;\n    }\n    while (end > start && rows[end - 1] === "") {\n        end -= 1;\n    }\n}\n',
-            output: 'function trim(rows) {\n    while (rows[start] === "") {\n        start += 1;\n    }\n\n    while (end > start && rows[end - 1] === "") {\n        end -= 1;\n    }\n}\n',
+            code: `function trim(rows) {
+    while (rows[start] === "") {
+        start += 1;
+    }
+    while (end > start && rows[end - 1] === "") {
+        end -= 1;
+    }
+}
+`,
+            output: `function trim(rows) {
+    while (rows[start] === "") {
+        start += 1;
+    }
+
+    while (end > start && rows[end - 1] === "") {
+        end -= 1;
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
         {
-            code: 'function split(content, push) {\n    for (let offset = 0; offset < content.deletions; offset += 1) {\n        push("del", offset);\n    }\n    for (let offset = 0; offset < content.additions; offset += 1) {\n        push("add", offset);\n    }\n}\n',
-            output: 'function split(content, push) {\n    for (let offset = 0; offset < content.deletions; offset += 1) {\n        push("del", offset);\n    }\n\n    for (let offset = 0; offset < content.additions; offset += 1) {\n        push("add", offset);\n    }\n}\n',
+            name: "separates multiline for passes over the same input",
+            code: `function split(content, push) {
+    for (let offset = 0; offset < content.deletions; offset += 1) {
+        push("del", offset);
+    }
+    for (let offset = 0; offset < content.additions; offset += 1) {
+        push("add", offset);
+    }
+}
+`,
+            output: `function split(content, push) {
+    for (let offset = 0; offset < content.deletions; offset += 1) {
+        push("del", offset);
+    }
+
+    for (let offset = 0; offset < content.additions; offset += 1) {
+        push("add", offset);
+    }
+}
+`,
             errors: [{ messageId: "unrelated" }],
         },
     ],

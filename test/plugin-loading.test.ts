@@ -19,7 +19,15 @@ describe("compiled plugin", () => {
             "function configure(enabled) {\n    if (current === enabled) {\n        return false;\n    }\n\n    current = enabled;\n    return true;\n}\n",
             'function normalize(text) {\n    const neutralized = clean(text);\n    return neutralized.includes("\\t") ? expand(neutralized) : neutralized;\n}\n',
             'function scan(args) {\n    let index = 0;\n    while (index < args.length) {\n        const argument = args[index];\n        if (argument === undefined) {\n            return [];\n        }\n\n        if (argument === "-u") {\n            index += 2;\n            continue;\n        }\n\n        if (argument === "-S" || argument === "-i") {\n            index += 1;\n            continue;\n        }\n        break;\n    }\n\n    return args.slice(index);\n}\n',
-            "switch (value) {\n    case 1:\n        work();\n        return;\n\n    case 2:\n        return;\n}\n",
+            `switch (value) {
+    case 1:
+        work();
+        return;
+
+    case 2:
+        return;
+}
+`,
             'it("first", () => {\n    setup();\n\n    expect(result).toBe(true);\n});\n\nit("second", () => {\n    run();\n});\n',
             "const parseA = {\n    parse() { return 1; },\n};\n\nconst parseB = {\n    parse() { return 2; },\n};\n",
             "type First = {\n    value: string;\n};\n\ntype Second = {\n    count: number;\n};\n",

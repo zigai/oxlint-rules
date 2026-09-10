@@ -28,9 +28,24 @@ tester.run("blank-lines/declaration-group-spacing", declarationGroupSpacing, {
         {
             code: "function result() {\n    const value = read();\n\n    return [\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n    ];\n}\n",
         },
-        "const definition = source.definition;\nconst input = enabled\n    ? { definition }\n    : { definition, mode };\n",
+        {
+            name: "keeps an object choice with the declaration it consumes",
+            code: `const definition = source.definition;
+const input = enabled
+    ? { definition }
+    : { definition, mode };
+`,
+        },
         "const first = {\n    mode: 'static',\n};\n\nconst second = {\n    enabled: true,\n};\n",
-        "function counters() {\n    const callCounts: Record<string, number> = {};\n    const resultCounts: Record<string, number> = {};\n    return [callCounts, resultCounts];\n}\n",
+        {
+            name: "keeps sibling empty object accumulators together",
+            code: `function counters() {
+    const callCounts: Record<string, number> = {};
+    const resultCounts: Record<string, number> = {};
+    return [callCounts, resultCounts];
+}
+`,
+        },
         'const first = Symbol.for("first");\nconst second = Symbol.for(\n    "second",\n);\nconst third = Symbol.for("third");\n',
         `function install() {
     let state: State;
@@ -108,10 +123,53 @@ type UserName = string;
         },
         "function setup() {\n    const values = [];\n    let count = 0;\n    const first = function () { return count; };\n    const second = function () { return values; };\n}\n",
         'const KEY = Symbol.for("state");\nlet enabled = false;\n',
-        "const pendingByFile = new WeakMap<\n    FileMetadata,\n    { readonly promise: Promise<Result> }\n>();\nconst pendingByDir = new WeakMap<\n    DirMetadata,\n    { readonly promise: Promise<Result> }\n>();\n",
-        "function build(name) {\n    const key = name;\n    const config = {\n        key,\n        enabled: true,\n    };\n    return config;\n}\n",
-        "function preview(args, context) {\n    const record = parse(args);\n    if (record === undefined) return fallback(args, context);\n\n    const uid = getId(record);\n    return uid;\n}\n",
-        "function load(path) {\n    if (cached.has(path)) {\n        return cached.get(path);\n    }\n\n    const fresh = read(path);\n    return fresh;\n}\n",
+        {
+            name: "keeps empty constructors with multiline type arguments together",
+            code: `const pendingByFile = new WeakMap<
+    FileMetadata,
+    { readonly promise: Promise<Result> }
+>();
+const pendingByDir = new WeakMap<
+    DirMetadata,
+    { readonly promise: Promise<Result> }
+>();
+`,
+        },
+        {
+            name: "keeps a scalar with the object that consumes it",
+            code: `function build(name) {
+    const key = name;
+    const config = {
+        key,
+        enabled: true,
+    };
+    return config;
+}
+`,
+        },
+        {
+            name: "preserves separation before a declaration following a guard",
+            code: `function preview(args, context) {
+    const record = parse(args);
+    if (record === undefined) return fallback(args, context);
+
+    const uid = getId(record);
+    return uid;
+}
+`,
+        },
+        {
+            name: "preserves separation before a declaration following a cache check",
+            code: `function load(path) {
+    if (cached.has(path)) {
+        return cached.get(path);
+    }
+
+    const fresh = read(path);
+    return fresh;
+}
+`,
+        },
     ],
     invalid: [
         {
@@ -120,8 +178,28 @@ type UserName = string;
             errors: [{ messageId: "unexpectedBlank" }],
         },
         {
-            code: 'function normalizedWriteArgs(args) {\n    const parsed = parseArgs(args);\n    const path = pathField(parsed);\n    const content = stringField(parsed, "content");\n    let normalized = {};\n    if (path !== undefined) normalized = { ...normalized, path };\n    if (content !== undefined) normalized = { ...normalized, content };\n    return normalized;\n}\n',
-            output: 'function normalizedWriteArgs(args) {\n    const parsed = parseArgs(args);\n    const path = pathField(parsed);\n    const content = stringField(parsed, "content");\n\n    let normalized = {};\n    if (path !== undefined) normalized = { ...normalized, path };\n    if (content !== undefined) normalized = { ...normalized, content };\n    return normalized;\n}\n',
+            name: "separates an empty object accumulator from extracted inputs",
+            code: `function normalizedWriteArgs(args) {
+    const parsed = parseArgs(args);
+    const path = pathField(parsed);
+    const content = stringField(parsed, "content");
+    let normalized = {};
+    if (path !== undefined) normalized = { ...normalized, path };
+    if (content !== undefined) normalized = { ...normalized, content };
+    return normalized;
+}
+`,
+            output: `function normalizedWriteArgs(args) {
+    const parsed = parseArgs(args);
+    const path = pathField(parsed);
+    const content = stringField(parsed, "content");
+
+    let normalized = {};
+    if (path !== undefined) normalized = { ...normalized, path };
+    if (content !== undefined) normalized = { ...normalized, content };
+    return normalized;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
@@ -311,43 +389,165 @@ type ChatContainerInstance = Container;
             ],
         },
         {
-            code: "function preview(args, context) {\n    const record = parse(args);\n    if (record === undefined) return fallback(args, context);\n    const uid = getId(record);\n    return uid;\n}\n",
-            output: "function preview(args, context) {\n    const record = parse(args);\n    if (record === undefined) return fallback(args, context);\n\n    const uid = getId(record);\n    return uid;\n}\n",
+            name: "separates a declaration from a preceding single-line guard",
+            code: `function preview(args, context) {
+    const record = parse(args);
+    if (record === undefined) return fallback(args, context);
+    const uid = getId(record);
+    return uid;
+}
+`,
+            output: `function preview(args, context) {
+    const record = parse(args);
+    if (record === undefined) return fallback(args, context);
+
+    const uid = getId(record);
+    return uid;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function load(path) {\n    if (cached.has(path)) {\n        return cached.get(path);\n    }\n    const fresh = read(path);\n    return fresh;\n}\n",
-            output: "function load(path) {\n    if (cached.has(path)) {\n        return cached.get(path);\n    }\n\n    const fresh = read(path);\n    return fresh;\n}\n",
+            name: "separates a declaration from a preceding braced cache check",
+            code: `function load(path) {
+    if (cached.has(path)) {
+        return cached.get(path);
+    }
+    const fresh = read(path);
+    return fresh;
+}
+`,
+            output: `function load(path) {
+    if (cached.has(path)) {
+        return cached.get(path);
+    }
+
+    const fresh = read(path);
+    return fresh;
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "const DEFAULT_APPEARANCE = {\n    mode: 'static',\n} as const;\nconst DEFAULT_DEBUG = {\n    enabled: false,\n} as const;\n",
-            output: "const DEFAULT_APPEARANCE = {\n    mode: 'static',\n} as const;\n\nconst DEFAULT_DEBUG = {\n    enabled: false,\n} as const;\n",
+            name: "separates multiline asserted module objects",
+            code: `const DEFAULT_APPEARANCE = {
+    mode: 'static',
+} as const;
+const DEFAULT_DEBUG = {
+    enabled: false,
+} as const;
+`,
+            output: `const DEFAULT_APPEARANCE = {
+    mode: 'static',
+} as const;
+
+const DEFAULT_DEBUG = {
+    enabled: false,
+} as const;
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "const toneSchema = Type.Union([\n    Type.Literal('a'),\n]);\nconst inlineSchema = Type.Object({\n    tone: Type.Optional(toneSchema),\n});\n",
-            output: "const toneSchema = Type.Union([\n    Type.Literal('a'),\n]);\n\nconst inlineSchema = Type.Object({\n    tone: Type.Optional(toneSchema),\n});\n",
+            name: "separates multiline module constructions even when related",
+            code: `const toneSchema = Type.Union([
+    Type.Literal('a'),
+]);
+const inlineSchema = Type.Object({
+    tone: Type.Optional(toneSchema),
+});
+`,
+            output: `const toneSchema = Type.Union([
+    Type.Literal('a'),
+]);
+
+const inlineSchema = Type.Object({
+    tone: Type.Optional(toneSchema),
+});
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "const KNOWN = new Set([\n    'a',\n]);\nconst EXTRA = new Set([\n    'b',\n]);\n",
-            output: "const KNOWN = new Set([\n    'a',\n]);\n\nconst EXTRA = new Set([\n    'b',\n]);\n",
+            name: "separates constructors containing multiline arrays",
+            code: `const KNOWN = new Set([
+    'a',
+]);
+const EXTRA = new Set([
+    'b',
+]);
+`,
+            output: `const KNOWN = new Set([
+    'a',
+]);
+
+const EXTRA = new Set([
+    'b',
+]);
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function run(queue) {\n    const succeed = () => {\n        finish(queue);\n    };\n    const fail = () => {\n        abort(queue);\n    };\n}\n",
-            output: "function run(queue) {\n    const succeed = () => {\n        finish(queue);\n    };\n\n    const fail = () => {\n        abort(queue);\n    };\n}\n",
+            name: "separates adjacent block-bodied arrow functions",
+            code: `function run(queue) {
+    const succeed = () => {
+        finish(queue);
+    };
+    const fail = () => {
+        abort(queue);
+    };
+}
+`,
+            output: `function run(queue) {
+    const succeed = () => {
+        finish(queue);
+    };
+
+    const fail = () => {
+        abort(queue);
+    };
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "export const stringParser = {\n    parse(value) {\n        return check(value);\n    },\n};\nexport const numberParser = {\n    parse(value) {\n        return check(value);\n    },\n};\n",
-            output: "export const stringParser = {\n    parse(value) {\n        return check(value);\n    },\n};\n\nexport const numberParser = {\n    parse(value) {\n        return check(value);\n    },\n};\n",
+            name: "separates exported objects containing methods",
+            code: `export const stringParser = {
+    parse(value) {
+        return check(value);
+    },
+};
+export const numberParser = {
+    parse(value) {
+        return check(value);
+    },
+};
+`,
+            output: `export const stringParser = {
+    parse(value) {
+        return check(value);
+    },
+};
+
+export const numberParser = {
+    parse(value) {
+        return check(value);
+    },
+};
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "const kind = 'static';\nconst config = {\n    mode: 'fixed',\n};\n",
-            output: "const kind = 'static';\n\nconst config = {\n    mode: 'fixed',\n};\n",
+            name: "separates a scalar from an independent object construction",
+            code: `const kind = 'static';
+const config = {
+    mode: 'fixed',
+};
+`,
+            output: `const kind = 'static';
+
+const config = {
+    mode: 'fixed',
+};
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
     ],

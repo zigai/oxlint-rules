@@ -7,15 +7,67 @@ tester.run("blank-lines/expression-group-spacing", expressionGroupSpacing, {
     valid: [
         "function run(input) {\n    release(input);\n\n    const size = measure(input);\n    if (ready) return;\n\n    consume(input);\n}\n",
         {
+            name: "preserves explicit spacing when a returned closure shadows the capture",
             options: [{ beforeGroup: "always" }],
-            code: "function prepare(theme, count) {\n    count += 1;\n\n    const saved = capture(theme);\n\n    patch(theme);\n\n    return (saved) => restore(theme, saved);\n}\n",
+            code: `function prepare(theme, count) {
+    count += 1;
+
+    const saved = capture(theme);
+
+    patch(theme);
+
+    return (saved) => restore(theme, saved);
+}
+`,
         },
         "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n\n    if (redraw) {\n        editor.render();\n    }\n}\n",
-        "function walk(statement, indent, depth) {\n    if (index > 0) this.add(statement.pos, indent);\n    this.walkNode(statement, indent, depth);\n}\n",
-        "while (ready) {\n    if (skip) continue;\n    work();\n}\n",
-        "function trace(logger, snapshot) {\n    logger.record('start', () => ({\n        phase: 'start',\n    }));\n    logger.record('stop', () => ({\n        phase: 'stop',\n    }));\n}\n",
-        "function boot() {\n    prepare();\n    run();\n}\n",
-        "function collect(lineIndex, rows, lineRows) {\n    lineRows.push({\n        start: 0,\n        end: 1,\n    });\n    rows.set(lineIndex, lineRows);\n}\n",
+        {
+            name: "allows a single-line conditional update before a call",
+            code: `function walk(statement, indent, depth) {
+    if (index > 0) this.add(statement.pos, indent);
+    this.walkNode(statement, indent, depth);
+}
+`,
+        },
+        {
+            name: "keeps loop work with a continue filter",
+            code: `while (ready) {
+    if (skip) continue;
+    work();
+}
+`,
+        },
+        {
+            name: "allows consecutive calls with expression-bodied callbacks",
+            code: `function trace(logger, snapshot) {
+    logger.record('start', () => ({
+        phase: 'start',
+    }));
+    logger.record('stop', () => ({
+        phase: 'stop',
+    }));
+}
+`,
+        },
+        {
+            name: "keeps consecutive single-line calls together",
+            code: `function boot() {
+    prepare();
+    run();
+}
+`,
+        },
+        {
+            name: "keeps a multiline call with a consumer of its receiver",
+            code: `function collect(lineIndex, rows, lineRows) {
+    lineRows.push({
+        start: 0,
+        end: 1,
+    });
+    rows.set(lineIndex, lineRows);
+}
+`,
+        },
         {
             options: [{ compactTryFinally: false }],
             code: "function decode(state, value) {\n    state.active.add(value);\n\n    try {\n        return decodeValue(value);\n    } finally {\n        state.active.delete(value);\n    }\n}\n",
@@ -33,13 +85,45 @@ tester.run("blank-lines/expression-group-spacing", expressionGroupSpacing, {
     ],
     invalid: [
         {
-            code: "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n    if (redraw) {\n        editor.render();\n    }\n}\n",
-            output: "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n\n    if (redraw) {\n        editor.render();\n    }\n}\n",
+            name: "separates a guard from a preceding call",
+            code: `function clear(editor) {
+    const redraw = editor.visible;
+    clearUi();
+    if (redraw) {
+        editor.render();
+    }
+}
+`,
+            output: `function clear(editor) {
+    const redraw = editor.visible;
+    clearUi();
+
+    if (redraw) {
+        editor.render();
+    }
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function run(input) {\n    release(input);\n    const size = measure(input);\n    if (size > limit) return;\n\n    consume(input);\n}\n",
-            output: "function run(input) {\n    release(input);\n\n    const size = measure(input);\n    if (size > limit) return;\n\n    consume(input);\n}\n",
+            name: "separates a completed call from the following declaration",
+            code: `function run(input) {
+    release(input);
+    const size = measure(input);
+    if (size > limit) return;
+
+    consume(input);
+}
+`,
+            output: `function run(input) {
+    release(input);
+
+    const size = measure(input);
+    if (size > limit) return;
+
+    consume(input);
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
@@ -49,9 +133,26 @@ tester.run("blank-lines/expression-group-spacing", expressionGroupSpacing, {
             errors: [{ messageId: "unexpectedBlank" }, { messageId: "unexpectedBlank" }],
         },
         {
+            name: "compacts declaration setup while separating the following guard",
             options: [{ beforeGroup: "always" }],
-            code: "function clear(editor) {\n    const redraw = editor.visible;\n\n    clearUi();\n    if (redraw) {\n        editor.render();\n    }\n}\n",
-            output: "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n\n    if (redraw) {\n        editor.render();\n    }\n}\n",
+            code: `function clear(editor) {
+    const redraw = editor.visible;
+
+    clearUi();
+    if (redraw) {
+        editor.render();
+    }
+}
+`,
+            output: `function clear(editor) {
+    const redraw = editor.visible;
+    clearUi();
+
+    if (redraw) {
+        editor.render();
+    }
+}
+`,
             errors: [{ messageId: "unexpectedBlank" }, { messageId: "expectedBlank" }],
         },
         {
@@ -73,28 +174,112 @@ tester.run("blank-lines/expression-group-spacing", expressionGroupSpacing, {
             errors: [{ messageId: "unexpectedBlank" }, { messageId: "expectedBlank" }],
         },
         {
-            code: "function check(value, state) {\n    if (!Guard.isObject(value)) return reject();\n    state.active.add(value);\n}\n",
-            output: "function check(value, state) {\n    if (!Guard.isObject(value)) return reject();\n\n    state.active.add(value);\n}\n",
+            name: "separates an early-exit guard from a following call",
+            code: `function check(value, state) {
+    if (!Guard.isObject(value)) return reject();
+    state.active.add(value);
+}
+`,
+            output: `function check(value, state) {
+    if (!Guard.isObject(value)) return reject();
+
+    state.active.add(value);
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function schedule() {\n    if (syntaxTimer !== undefined) clearTimeout(syntaxTimer);\n    pendingStart = {\n        generation: generation(),\n    };\n}\n",
-            output: "function schedule() {\n    if (syntaxTimer !== undefined) clearTimeout(syntaxTimer);\n\n    pendingStart = {\n        generation: generation(),\n    };\n}\n",
+            name: "separates a conditional call from a multiline assignment",
+            code: `function schedule() {
+    if (syntaxTimer !== undefined) clearTimeout(syntaxTimer);
+    pendingStart = {
+        generation: generation(),
+    };
+}
+`,
+            output: `function schedule() {
+    if (syntaxTimer !== undefined) clearTimeout(syntaxTimer);
+
+    pendingStart = {
+        generation: generation(),
+    };
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function listen(pi) {\n    pi.on('start', (event) => {\n        for (const message of event.messages) {\n            show(message);\n        }\n    });\n    pi.on('stop', (event) => {\n        for (const message of event.messages) {\n            hide(message);\n        }\n    });\n}\n",
-            output: "function listen(pi) {\n    pi.on('start', (event) => {\n        for (const message of event.messages) {\n            show(message);\n        }\n    });\n\n    pi.on('stop', (event) => {\n        for (const message of event.messages) {\n            hide(message);\n        }\n    });\n}\n",
+            name: "separates registrations with loops in their handlers",
+            code: `function listen(pi) {
+    pi.on('start', (event) => {
+        for (const message of event.messages) {
+            show(message);
+        }
+    });
+    pi.on('stop', (event) => {
+        for (const message of event.messages) {
+            hide(message);
+        }
+    });
+}
+`,
+            output: `function listen(pi) {
+    pi.on('start', (event) => {
+        for (const message of event.messages) {
+            show(message);
+        }
+    });
+
+    pi.on('stop', (event) => {
+        for (const message of event.messages) {
+            hide(message);
+        }
+    });
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function listen(pi) {\n    pi.on('start', () => {\n        show('start');\n    });\n    pi.on('stop', () => {\n        show('stop');\n    });\n}\n",
-            output: "function listen(pi) {\n    pi.on('start', () => {\n        show('start');\n    });\n\n    pi.on('stop', () => {\n        show('stop');\n    });\n}\n",
+            name: "separates registrations with simple block-bodied handlers",
+            code: `function listen(pi) {
+    pi.on('start', () => {
+        show('start');
+    });
+    pi.on('stop', () => {
+        show('stop');
+    });
+}
+`,
+            output: `function listen(pi) {
+    pi.on('start', () => {
+        show('start');
+    });
+
+    pi.on('stop', () => {
+        show('stop');
+    });
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
         {
-            code: "function apply(nextConfig) {\n    configureCache(\n        nextConfig.cache,\n        nextConfig.limits,\n    );\n    applyConfig(nextConfig);\n}\n",
-            output: "function apply(nextConfig) {\n    configureCache(\n        nextConfig.cache,\n        nextConfig.limits,\n    );\n\n    applyConfig(nextConfig);\n}\n",
+            name: "separates a multiline call from an independent call",
+            code: `function apply(nextConfig) {
+    configureCache(
+        nextConfig.cache,
+        nextConfig.limits,
+    );
+    applyConfig(nextConfig);
+}
+`,
+            output: `function apply(nextConfig) {
+    configureCache(
+        nextConfig.cache,
+        nextConfig.limits,
+    );
+
+    applyConfig(nextConfig);
+}
+`,
             errors: [{ messageId: "expectedBlank" }],
         },
     ],
