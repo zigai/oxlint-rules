@@ -8,8 +8,6 @@ A collection of custom Oxlint rules and presets for TypeScript projects.
 
 ## Install
 
-Requires Node.js 22.19+ and Oxlint 1.78.x or later within major version 1.
-
 ```sh
 npm install --save-dev oxlint@^1.78.0 oxlint-rules
 ```
