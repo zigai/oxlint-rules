@@ -82,6 +82,26 @@ tester.run("blank-lines/expression-group-spacing", expressionGroupSpacing, {
             prepare();
             return done;
         `,
+        {
+            name: "keeps single-line assertions compact with declarations",
+            code: `function process(path, options) {
+    const requested = resolve(path);
+    options.signal?.throwIfAborted();
+    const file = open(requested);
+    return file;
+}
+`,
+        },
+        {
+            name: "keeps same-receiver calls and declarations compact",
+            code: `function run(service, pi) {
+    service.cancel();
+    const pending = service.drain();
+    service.reset();
+    service.persist(pi);
+}
+`,
+        },
     ],
     invalid: [
         {

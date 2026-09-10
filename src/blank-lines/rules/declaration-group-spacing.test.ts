@@ -170,6 +170,29 @@ const pendingByDir = new WeakMap<
 }
 `,
         },
+        {
+            name: "keeps single-line assertions compact with adjacent declarations",
+            code: `function process(path, options) {
+    const requested = resolve(path);
+    options.signal?.throwIfAborted();
+    const file = open(requested);
+    return file;
+}
+`,
+        },
+        {
+            name: "keeps same-receiver method sequences compact",
+            code: `class Coordinator {
+    reset(pi) {
+        this.cancelScheduledTask();
+        const pending = this.takePendingFollowUps();
+        this.resetRecovery();
+        this.persist(pi);
+        return pending;
+    }
+}
+`,
+        },
     ],
     invalid: [
         {
