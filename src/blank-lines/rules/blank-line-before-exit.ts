@@ -1,11 +1,13 @@
 import {
     compactStatementBoundary,
+    conditionalMutation,
     isCompactExitPredecessor,
     statementGroupingDefaults,
     statementGroupingSchema,
     type StatementGroupingOptions,
 } from "../related-statements.ts";
-import { lineSpan } from "../ast.ts";
+import { mutationFeedsRegions } from "../references.ts";
+import { asNode, isSingleLine, lineSpan, statementBody } from "../ast.ts";
 import {
     createLayoutRule,
     pairwise,
@@ -18,7 +20,7 @@ import {
     type StatementSelector,
 } from "../selectors.ts";
 import { getSourceCode } from "../spacing.ts";
-import type { AstNode, RuleContext } from "../types.ts";
+import type { AstNode, RuleContext, SourceCode } from "../types.ts";
 
 export type ExitKind = "return" | "throw" | "break" | "continue";
 
@@ -45,6 +47,22 @@ const DEFAULTS: Required<BlankLineBeforeExitOptions> = {
 
 function isConfiguredExit(node: AstNode, exits: readonly ExitKind[], sourceText: string): boolean {
     return exits.some((exit) => statementMatches(node, exit, sourceText));
+}
+
+function isConstructedResultTail(
+    previous: AstNode,
+    current: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    if (current.type !== "ReturnStatement") return false;
+    if (previous.type !== "IfStatement" || asNode(previous.alternate) !== null) return false;
+    if (!isSingleLine(previous, sourceCode.text)) return false;
+    const branch = asNode(previous.consequent);
+    const body = branch?.type === "BlockStatement" ? statementBody(branch) : [branch];
+    if (body.length !== 1 || body[0]?.type !== "ReturnStatement") return false;
+    let result = asNode(current.argument);
+    while (result?.type === "ParenthesizedExpression") result = asNode(result.expression);
+    return result?.type === "ObjectExpression" || result?.type === "ArrayExpression";
 }
 
 export default createLayoutRule<Options>(
@@ -140,7 +158,22 @@ export default createLayoutRule<Options>(
                     continue;
                 }
                 if (lineSpan(container, sourceCode.text) < options.minContainerLines) continue;
+                // A result that returns an updated value ends the run with a
+                // boundary, even though lone guards cuddle with their exit:
+                // the update phase completes before the value is returned.
+                const exitIndex = statements.indexOf(current);
+                const update = statements[exitIndex - 1];
+                const updateMutation =
+                    update === undefined ? null : conditionalMutation(update, sourceCode);
+                const returned = asNode(current.argument);
+                const updateTail =
+                    updateMutation !== null &&
+                    current.type === "ReturnStatement" &&
+                    returned !== null &&
+                    mutationFeedsRegions(updateMutation, [returned], sourceCode, true);
                 if (
+                    !updateTail &&
+                    !isConstructedResultTail(previous, current, sourceCode) &&
                     options.exceptAfter.length > 0 &&
                     anyStatementSelectorMatches(previous, options.exceptAfter, sourceCode.text)
                 ) {

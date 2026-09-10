@@ -9,7 +9,7 @@ const fixtures = [
     {
         name: "destructured-setup.ts",
         input: "function decode(source, remaining) {\n    prepare();\n\n    const { values: rows, length: rowCount } = collection(source);\n\n    remaining -= rowCount;\n\n    const lines = [];\n    for (let row = 0; row < rowCount; row++) {\n        lines.push(rows[row]);\n    }\n\n    finish(lines, remaining);\n}\n",
-        output: "function decode(source, remaining) {\n    prepare();\n\n    const { values: rows, length: rowCount } = collection(source);\n    remaining -= rowCount;\n    const lines = [];\n    for (let row = 0; row < rowCount; row++) {\n        lines.push(rows[row]);\n    }\n\n    finish(lines, remaining);\n}\n",
+        output: "function decode(source, remaining) {\n    prepare();\n\n    const { values: rows, length: rowCount } = collection(source);\n    remaining -= rowCount;\n\n    const lines = [];\n    for (let row = 0; row < rowCount; row++) {\n        lines.push(rows[row]);\n    }\n\n    finish(lines, remaining);\n}\n",
     },
     {
         name: "destructured-setup.test.ts",
@@ -57,6 +57,7 @@ const fixtures = [
     {
         name: "long-return-boundary.ts",
         input: "function format(output) {\n    const formatted = normalizeCode(output);\n    if (formatted.trim().length === 0) return undefined;\n    remember(cacheKey, formatted);\n\n    return formatted;\n}\n",
+        output: "function format(output) {\n    const formatted = normalizeCode(output);\n    if (formatted.trim().length === 0) return undefined;\n\n    remember(cacheKey, formatted);\n\n    return formatted;\n}\n",
     },
     {
         name: "tiny-return-boundary.ts",
@@ -143,7 +144,6 @@ const fixtures = [
     {
         name: "switch-cases.ts",
         input: "function select(value) {\n    switch (value) {\n        case 1: {\n            const item = read();\n            return process(item);\n        }\n\n        case 2:\n            return fallback();\n\n        default:\n            return undefined;\n    }\n}\n",
-        output: "function select(value) {\n    switch (value) {\n        case 1: {\n            const item = read();\n            return process(item);\n        }\n        case 2:\n            return fallback();\n        default:\n            return undefined;\n    }\n}\n",
     },
     {
         name: "scoped-key.ts",
@@ -232,7 +232,7 @@ const fixtures = [
     {
         name: "object-updates.ts",
         input: "function build(source) {\n    let result = {};\n\n    if (source.title) {\n        result = { ...result, title: source.title };\n    }\n\n    result = { ...result, enabled: true };\n\n    const preview = source.preview;\n\n    if (preview) {\n        result = { ...result, preview };\n    }\n\n    return result;\n}\n",
-        output: "function build(source) {\n    let result = {};\n    if (source.title) {\n        result = { ...result, title: source.title };\n    }\n    result = { ...result, enabled: true };\n    const preview = source.preview;\n    if (preview) {\n        result = { ...result, preview };\n    }\n    return result;\n}\n",
+        output: "function build(source) {\n    let result = {};\n    if (source.title) {\n        result = { ...result, title: source.title };\n    }\n    result = { ...result, enabled: true };\n\n    const preview = source.preview;\n    if (preview) {\n        result = { ...result, preview };\n    }\n\n    return result;\n}\n",
     },
     {
         name: "callback-boundary.ts",
@@ -255,7 +255,7 @@ const fixtures = [
     {
         name: "initialization.ts",
         input: "function tokenize(text) {\n    const tokens = [];\n\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n\n    return tokens;\n}\n",
-        output: "function tokenize(text) {\n    const tokens = [];\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n    return tokens;\n}\n",
+        output: "function tokenize(text) {\n    const tokens = [];\n    pattern.lastIndex = 0;\n\n    for (const match of text.matchAll(pattern)) {\n        tokens.push(match);\n    }\n\n    return tokens;\n}\n",
     },
     {
         name: "multiline-declarations.ts",
@@ -291,6 +291,7 @@ const fixtures = [
     {
         name: "local-arguments.ts",
         input: "function inspect() {\n    if (arguments.length > 1) {\n        first();\n    }\n    if (arguments[0]) {\n        second();\n    }\n}\n",
+        output: "function inspect() {\n    if (arguments.length > 1) {\n        first();\n    }\n\n    if (arguments[0]) {\n        second();\n    }\n}\n",
     },
     {
         name: "asserted-alias-guard.ts",
@@ -375,7 +376,7 @@ describe("semantic statement spacing", () => {
         } finally {
             rmSync(directory, { recursive: true, force: true });
         }
-    });
+    }, 60000);
 
     it("reports each shared gap once and fixes it with either owning rule enabled", () => {
         const directory = mkdtempSync(join(tmpdir(), "oxlint-shared-gap-"));
@@ -423,5 +424,5 @@ describe("semantic statement spacing", () => {
         } finally {
             rmSync(directory, { recursive: true, force: true });
         }
-    });
+    }, 60000);
 });

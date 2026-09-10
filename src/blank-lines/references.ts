@@ -205,6 +205,38 @@ export function callsUseSameTarget(left: AstNode, right: AstNode, sourceCode: So
     );
 }
 
+// A consumer continues the provider's step when it operates on the same
+// receiver or takes the provider's receiver as an argument (for example,
+// buffering rows and then storing the buffer).
+export function consumerUsesProviderReceiver(
+    provider: AstNode,
+    consumer: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    const provided = asNode(provider.expression);
+    const consumed = asNode(consumer.expression);
+    if (provided?.type !== "CallExpression" || consumed?.type !== "CallExpression") return false;
+    const providedCallee = asNode(provided.callee);
+    if (
+        providedCallee?.type !== "MemberExpression" &&
+        providedCallee?.type !== "OptionalMemberExpression"
+    )
+        return false;
+    const receiver = accessPath(asNode(providedCallee.object), sourceCode);
+    if (receiver === null) return false;
+    const usesReceiver = (node: AstNode | null): boolean => {
+        const path = accessPath(node, sourceCode);
+        return path !== null && samePath(receiver, path);
+    };
+    const consumedCallee = asNode(consumed.callee);
+    if (
+        (consumedCallee?.type === "MemberExpression" ||
+            consumedCallee?.type === "OptionalMemberExpression") &&
+        usesReceiver(asNode(consumedCallee.object))
+    )
+        return true;
+    return nodeArray(consumed.arguments).some((argument) => usesReceiver(argument));
+}
 export function mutationPath(statement: AstNode, sourceCode: SourceCode): AccessPath | null {
     const expression = asNode(statement.expression);
     if (statement.type !== "ExpressionStatement" || expression === null) return null;

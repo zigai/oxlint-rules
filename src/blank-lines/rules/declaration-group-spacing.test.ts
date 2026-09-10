@@ -28,7 +28,9 @@ tester.run("blank-lines/declaration-group-spacing", declarationGroupSpacing, {
         {
             code: "function result() {\n    const value = read();\n\n    return [\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n        value, value, value, value, value, value, value, value,\n    ];\n}\n",
         },
+        "const definition = source.definition;\nconst input = enabled\n    ? { definition }\n    : { definition, mode };\n",
         "const first = {\n    mode: 'static',\n};\n\nconst second = {\n    enabled: true,\n};\n",
+        "function counters() {\n    const callCounts: Record<string, number> = {};\n    const resultCounts: Record<string, number> = {};\n    return [callCounts, resultCounts];\n}\n",
         'const first = Symbol.for("first");\nconst second = Symbol.for(\n    "second",\n);\nconst third = Symbol.for("third");\n',
         `function install() {
     let state: State;
@@ -106,6 +108,10 @@ type UserName = string;
         },
         "function setup() {\n    const values = [];\n    let count = 0;\n    const first = function () { return count; };\n    const second = function () { return values; };\n}\n",
         'const KEY = Symbol.for("state");\nlet enabled = false;\n',
+        "const pendingByFile = new WeakMap<\n    FileMetadata,\n    { readonly promise: Promise<Result> }\n>();\nconst pendingByDir = new WeakMap<\n    DirMetadata,\n    { readonly promise: Promise<Result> }\n>();\n",
+        "function build(name) {\n    const key = name;\n    const config = {\n        key,\n        enabled: true,\n    };\n    return config;\n}\n",
+        "function preview(args, context) {\n    const record = parse(args);\n    if (record === undefined) return fallback(args, context);\n\n    const uid = getId(record);\n    return uid;\n}\n",
+        "function load(path) {\n    if (cached.has(path)) {\n        return cached.get(path);\n    }\n\n    const fresh = read(path);\n    return fresh;\n}\n",
     ],
     invalid: [
         {
@@ -114,8 +120,8 @@ type UserName = string;
             errors: [{ messageId: "unexpectedBlank" }],
         },
         {
-            code: "const definition = source.definition;\nconst input = enabled\n    ? { definition }\n    : { definition, mode };\n",
-            output: "const definition = source.definition;\n\nconst input = enabled\n    ? { definition }\n    : { definition, mode };\n",
+            code: 'function normalizedWriteArgs(args) {\n    const parsed = parseArgs(args);\n    const path = pathField(parsed);\n    const content = stringField(parsed, "content");\n    let normalized = {};\n    if (path !== undefined) normalized = { ...normalized, path };\n    if (content !== undefined) normalized = { ...normalized, content };\n    return normalized;\n}\n',
+            output: 'function normalizedWriteArgs(args) {\n    const parsed = parseArgs(args);\n    const path = pathField(parsed);\n    const content = stringField(parsed, "content");\n\n    let normalized = {};\n    if (path !== undefined) normalized = { ...normalized, path };\n    if (content !== undefined) normalized = { ...normalized, content };\n    return normalized;\n}\n',
             errors: [{ messageId: "expectedBlank" }],
         },
         {
@@ -303,6 +309,46 @@ type ChatContainerInstance = Container;
                 { messageId: "expectedBlank" },
                 { messageId: "unexpectedBlank" },
             ],
+        },
+        {
+            code: "function preview(args, context) {\n    const record = parse(args);\n    if (record === undefined) return fallback(args, context);\n    const uid = getId(record);\n    return uid;\n}\n",
+            output: "function preview(args, context) {\n    const record = parse(args);\n    if (record === undefined) return fallback(args, context);\n\n    const uid = getId(record);\n    return uid;\n}\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "function load(path) {\n    if (cached.has(path)) {\n        return cached.get(path);\n    }\n    const fresh = read(path);\n    return fresh;\n}\n",
+            output: "function load(path) {\n    if (cached.has(path)) {\n        return cached.get(path);\n    }\n\n    const fresh = read(path);\n    return fresh;\n}\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "const DEFAULT_APPEARANCE = {\n    mode: 'static',\n} as const;\nconst DEFAULT_DEBUG = {\n    enabled: false,\n} as const;\n",
+            output: "const DEFAULT_APPEARANCE = {\n    mode: 'static',\n} as const;\n\nconst DEFAULT_DEBUG = {\n    enabled: false,\n} as const;\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "const toneSchema = Type.Union([\n    Type.Literal('a'),\n]);\nconst inlineSchema = Type.Object({\n    tone: Type.Optional(toneSchema),\n});\n",
+            output: "const toneSchema = Type.Union([\n    Type.Literal('a'),\n]);\n\nconst inlineSchema = Type.Object({\n    tone: Type.Optional(toneSchema),\n});\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "const KNOWN = new Set([\n    'a',\n]);\nconst EXTRA = new Set([\n    'b',\n]);\n",
+            output: "const KNOWN = new Set([\n    'a',\n]);\n\nconst EXTRA = new Set([\n    'b',\n]);\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "function run(queue) {\n    const succeed = () => {\n        finish(queue);\n    };\n    const fail = () => {\n        abort(queue);\n    };\n}\n",
+            output: "function run(queue) {\n    const succeed = () => {\n        finish(queue);\n    };\n\n    const fail = () => {\n        abort(queue);\n    };\n}\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "export const stringParser = {\n    parse(value) {\n        return check(value);\n    },\n};\nexport const numberParser = {\n    parse(value) {\n        return check(value);\n    },\n};\n",
+            output: "export const stringParser = {\n    parse(value) {\n        return check(value);\n    },\n};\n\nexport const numberParser = {\n    parse(value) {\n        return check(value);\n    },\n};\n",
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            code: "const kind = 'static';\nconst config = {\n    mode: 'fixed',\n};\n",
+            output: "const kind = 'static';\n\nconst config = {\n    mode: 'fixed',\n};\n",
+            errors: [{ messageId: "expectedBlank" }],
         },
     ],
 });

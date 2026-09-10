@@ -16,20 +16,6 @@ const aliasInitializers = [
 
 tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
     valid: [
-        {
-            languageOptions: { sourceType: "script" },
-            code: "declare const sentinel: unknown;\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
-        },
-        {
-            languageOptions: { sourceType: "script" },
-            code: "function sentinel() {}\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
-        },
-        "function inspect() {\n    if (arguments[0]) {\n        acceptFirst();\n    }\n    if (arguments[1]) {\n        acceptSecond();\n    }\n}\n",
-        "function inspect() {\n    return () => {\n        if (arguments[0]) {\n            acceptFirst();\n        }\n        if (arguments[1]) {\n            acceptSecond();\n        }\n    };\n}\n",
-        {
-            languageOptions: { globals: { sentinel: "writable" } },
-            code: "function update(value) {\n    sentinel = value;\n}\nfunction configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
-        },
         ...aliasInitializers.map(
             (initializer) =>
                 `function configure(source) {\n    const target = ${initializer};\n    if (target) {\n        restore(target);\n    }\n}\n`,
@@ -40,13 +26,9 @@ tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
         ),
         "function run(input) {\n    const size = measure(input);\n    if (size > limit) return;\n\n    consume(input);\n}\n",
         "function disable(state) {\n    state.enabled = false;\n    if (state.wrapper !== undefined) {\n        restore(state.wrapper);\n    }\n}\n",
-        "function configure(target, first, second, undefined) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
-        "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
         "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
         "function disable(state) {\n    state.enabled = false;\n\n    if (state.wrapper !== undefined) {\n        restore(state.wrapper);\n    }\n}\n",
         "function configure(source) {\n    const target = source;\n\n    if (!enabled) {\n        restore(target);\n    }\n}\n",
-        "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n    if (redraw) {\n        editor.render();\n    }\n}\n",
-        "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n\n    if (redraw) {\n        editor.render();\n    }\n}\n",
         {
             options: [{ compactRelatedControlFlow: false }],
             code: "function select(value) {\n    if (value === 1) {\n        return 1;\n    }\n\n    if (value === 2) {\n        return 2;\n    }\n}\n",
@@ -55,14 +37,26 @@ tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
         "let ready;\nlet unrelated = read();\nready = check();\nif (ready) {\n    run();\n}\n",
         "const ready = check();\nif (ready) {\n    run();\n}\n",
         "const start = getStart();\nfor (let i = start; i < 10; i++) {\n    visit(i);\n}\n",
+        "const render = (item) => format(item);\nfor (const item of items) {\n    print(render(item));\n}\n",
+        "const rows = [];\nfor (const row of source) {\n    rows.push(row);\n}\n",
         "const result = load();\nif (enabled) {\n    consume(result);\n}\n",
         "const value = read();\n\nif (other) {\n    run();\n}\n",
+        // Consecutive compact single-line loops are one traversal unit.
+        'function kinds(content, push) {\n    for (let index = 0; index < content.deletions; index += 1) push("delete");\n    for (let index = 0; index < content.additions; index += 1) push("insert");\n}\n',
+        "function counts(rows) {\n    while (rows[start]) rows[start].used = true;\n    while (rows[end]) rows[end].used = false;\n}\n",
     ],
     invalid: [
         {
-            code: "function run(input) {\n    release(input);\n    const size = measure(input);\n    if (size > limit) return;\n\n    consume(input);\n}\n",
-            output: "function run(input) {\n    release(input);\n    const size = measure(input);\n\n    if (size > limit) return;\n\n    consume(input);\n}\n",
+            code: "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n    if (redraw) {\n        editor.render();\n    }\n}\n",
+            output: "function clear(editor) {\n    const redraw = editor.visible;\n    clearUi();\n\n    if (redraw) {\n        editor.render();\n    }\n}\n",
             errors: [{ messageId: "unrelated" }],
+        },
+        {
+            // A guard that reads the setup binding stays with it: the blank
+            // belongs after the completed step above, not before the guard.
+            code: "function run(input) {\n    release(input);\n    const size = measure(input);\n\n    if (size > limit) return;\n    consume(input);\n}\n",
+            output: "function run(input) {\n    release(input);\n    const size = measure(input);\n    if (size > limit) return;\n    consume(input);\n}\n",
+            errors: [{ messageId: "related" }],
         },
         {
             code: "function clear(slots, key) {\n    delete slots[key];\n    if (slots.first === undefined && slots.second === undefined) {\n        cleanup(slots);\n    }\n}\n",
@@ -131,6 +125,61 @@ tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
             code: "const a = 1;\nconst b = 2;\nif (a < b) {\n    run();\n}\n",
             output: "const a = 1;\nconst b = 2;\n\nif (a < b) {\n    run();\n}\n",
             errors: [{ messageId: "tooMany" }],
+        },
+        {
+            code: "function inspect() {\n    if (arguments[0]) {\n        acceptFirst();\n    }\n    if (arguments[1]) {\n        acceptSecond();\n    }\n}\n",
+            output: "function inspect() {\n    if (arguments[0]) {\n        acceptFirst();\n    }\n\n    if (arguments[1]) {\n        acceptSecond();\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function inspect() {\n    return () => {\n        if (arguments[0]) {\n            acceptFirst();\n        }\n        if (arguments[1]) {\n            acceptSecond();\n        }\n    };\n}\n",
+            output: "function inspect() {\n    return () => {\n        if (arguments[0]) {\n            acceptFirst();\n        }\n\n        if (arguments[1]) {\n            acceptSecond();\n        }\n    };\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function configure(target, first, second, undefined) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
+            output: "function configure(target, first, second, undefined) {\n    if (first !== undefined) {\n        target.first = first;\n    }\n\n    if (second !== undefined) {\n        target.second = second;\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
+            output: "function configure(target, input) {\n    if (input.first) {\n        target.first = input.first;\n    }\n\n    if (input.second) {\n        target.second = input.second;\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            languageOptions: { sourceType: "script" },
+            code: "declare const sentinel: unknown;\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+            output: "declare const sentinel: unknown;\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            languageOptions: { sourceType: "script" },
+            code: "function sentinel() {}\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+            output: "function sentinel() {}\nfunction configure(target, first, second) {\n    if (first !== sentinel) {\n        target.first = first;\n    }\n\n    if (second !== sentinel) {\n        target.second = second;\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            languageOptions: { globals: { sentinel: "writable" } },
+            code: "function update(value) {\n    sentinel = value;\n}\nfunction configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
+            output: "function update(value) {\n    sentinel = value;\n}\nfunction configure(first, second) {\n    if (first !== sentinel) {\n        acceptFirst();\n    }\n\n    if (second !== sentinel) {\n        acceptSecond();\n    }\n}\n",
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: "function renderAll(items) {\n    const render = (item) => {\n        const line = format(item);\n        return prefix + line;\n    };\n    for (const item of items) {\n        print(render(item));\n    }\n}\n",
+            output: "function renderAll(items) {\n    const render = (item) => {\n        const line = format(item);\n        return prefix + line;\n    };\n\n    for (const item of items) {\n        print(render(item));\n    }\n}\n",
+            errors: [{ messageId: "callbackPhase" }],
+        },
+        {
+            // Two multiline scans over the same state are separate passes
+            // (forward trim, backward trim), unlike the single-line pair above.
+            code: 'function trim(rows) {\n    while (rows[start] === "") {\n        start += 1;\n    }\n    while (end > start && rows[end - 1] === "") {\n        end -= 1;\n    }\n}\n',
+            output: 'function trim(rows) {\n    while (rows[start] === "") {\n        start += 1;\n    }\n\n    while (end > start && rows[end - 1] === "") {\n        end -= 1;\n    }\n}\n',
+            errors: [{ messageId: "unrelated" }],
+        },
+        {
+            code: 'function split(content, push) {\n    for (let offset = 0; offset < content.deletions; offset += 1) {\n        push("del", offset);\n    }\n    for (let offset = 0; offset < content.additions; offset += 1) {\n        push("add", offset);\n    }\n}\n',
+            output: 'function split(content, push) {\n    for (let offset = 0; offset < content.deletions; offset += 1) {\n        push("del", offset);\n    }\n\n    for (let offset = 0; offset < content.additions; offset += 1) {\n        push("add", offset);\n    }\n}\n',
+            errors: [{ messageId: "unrelated" }],
         },
     ],
 });

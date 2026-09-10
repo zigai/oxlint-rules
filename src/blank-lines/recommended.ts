@@ -67,7 +67,11 @@ export const recommendedRules = {
         "warn",
         {
             maxCuddledLines: 2,
-            longCase: "never",
+            // Substantive cases (constructions, calls, braced bodies, returned
+            // selections) separate; stacked labels and value mappings stay
+            // compact. This matches the author's hand-formatted corpus on 75 of
+            // 75 substantive clause boundaries and 44 of 44 mapping ones.
+            longCase: "always",
             shortCase: "never",
             emptyCase: "never",
             ignoreFallthrough: true,

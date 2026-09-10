@@ -1,11 +1,12 @@
+import { consumerUsesProviderReceiver } from "../references.ts";
 import {
     compactStatementBoundary,
-    deferredGuardBoundary,
     statementGroupingDefaults,
     statementGroupingSchema,
     type StatementGroupingOptions,
 } from "../related-statements.ts";
-import { asNode } from "../ast.ts";
+import { asNode, isSingleLine, nodeArray } from "../ast.ts";
+import { getSourceCode, rangeOf } from "../spacing.ts";
 import {
     createLayoutRule,
     pairwise,
@@ -13,9 +14,7 @@ import {
     statementContainerVisitors,
 } from "../rule-utils.ts";
 import { anyStatementSelectorMatches, type StatementSelector } from "../selectors.ts";
-import { getSourceCode } from "../spacing.ts";
 import type { AstNode, BlankLinePolicy, RuleContext } from "../types.ts";
-
 export type ExpressionKind =
     | "assignment"
     | "await"
@@ -93,6 +92,33 @@ function expressionKind(statement: AstNode): ExpressionKind | null {
     return expression === null ? null : expressionNodeKind(expression);
 }
 
+// A call that registers an independent behavior: one of its arguments is a
+// block-bodied closure with its own body. Telemetry payloads and other
+// expression-bodied closures stay attached to their step.
+function registersBehavior(statement: AstNode): boolean {
+    const expression = asNode(statement.expression);
+    if (expression?.type !== "CallExpression") return false;
+    return nodeArray(expression.arguments).some((argument) => {
+        const callback = asNode(argument);
+        if (callback?.type !== "ArrowFunctionExpression" && callback?.type !== "FunctionExpression")
+            return false;
+        return asNode(callback.body)?.type === "BlockStatement";
+    });
+}
+
+function sameCallTarget(left: AstNode, right: AstNode, text: string): boolean {
+    const caller = (statement: AstNode): string | null => {
+        const expression = asNode(statement.expression);
+        if (expression?.type !== "CallExpression") return null;
+        const callee = asNode(expression.callee);
+        if (callee === null) return null;
+        const [start, end] = rangeOf(callee);
+        return text.slice(start, end);
+    };
+    const callerLeft = caller(left);
+    return callerLeft !== null && callerLeft === caller(right);
+}
+
 export default createLayoutRule<Options>(
     "Group selected expression statements and separate the group from surrounding statement kinds.",
     [
@@ -138,11 +164,6 @@ export default createLayoutRule<Options>(
             for (const [previous, current] of pairwise(statements)) {
                 const previousKind = expressionKind(previous);
                 const currentKind = expressionKind(current);
-                if (
-                    options.compactRelatedControlFlow &&
-                    deferredGuardBoundary(statements, statements.indexOf(current), sourceCode)
-                )
-                    continue;
                 const previousSelected =
                     previousKind !== null && options.kinds.includes(previousKind);
                 const currentSelected = currentKind !== null && options.kinds.includes(currentKind);
@@ -170,19 +191,63 @@ export default createLayoutRule<Options>(
                     policy = options.beforeGroup;
                 }
 
-                if (
-                    (previousSelected || currentSelected) &&
-                    compactStatementBoundary(
-                        container,
-                        statements,
-                        statements.indexOf(current),
-                        sourceCode,
-                        options,
-                    )
-                ) {
+                const compact = compactStatementBoundary(
+                    container,
+                    statements,
+                    statements.indexOf(current),
+                    sourceCode,
+                    options,
+                );
+                if ((previousSelected || currentSelected) && compact) {
                     policy = "never";
                 }
-
+                // An expression after a conditional starts a new phase, unless
+                // it continues a compact single-line update pair, filters a
+                // loop body, or belongs to a compact group the shared analysis
+                // already claimed (such as trailing local bookkeeping).
+                if (currentSelected && previous.type === "IfStatement" && policy !== "never") {
+                    const consequent = asNode(previous.consequent);
+                    const continuesUpdate =
+                        asNode(previous.alternate) === null &&
+                        consequent !== null &&
+                        consequent.type === "ExpressionStatement" &&
+                        isSingleLine(previous, sourceCode.text) &&
+                        isSingleLine(current, sourceCode.text);
+                    const continueFilter =
+                        asNode(previous.alternate) === null &&
+                        consequent?.type === "ContinueStatement";
+                    if (!continuesUpdate && !continueFilter) {
+                        policy = "always";
+                    }
+                }
+                // Independent registrations separate: consecutive calls to the
+                // same target whose closures each have their own body are
+                // distinct behaviors. A setup step attached to its handler
+                // stays compact.
+                if (
+                    previousSelected &&
+                    currentSelected &&
+                    policy !== "never" &&
+                    registersBehavior(previous) &&
+                    registersBehavior(current) &&
+                    sameCallTarget(previous, current, sourceCode.text)
+                ) {
+                    policy = "always";
+                }
+                // A substantial call step completes before the next call begins:
+                // consecutive calls stay compact only while the first fits on one
+                // line or the next call consumes the previous call's receiver.
+                if (
+                    previousSelected &&
+                    currentSelected &&
+                    previousKind === "call" &&
+                    currentKind === "call" &&
+                    policy !== "never" &&
+                    !isSingleLine(previous, sourceCode.text) &&
+                    !consumerUsesProviderReceiver(previous, current, sourceCode)
+                ) {
+                    policy = "always";
+                }
                 reportGapPolicy(context, previous, current, policy, {
                     always: "expectedBlank",
                     never: "unexpectedBlank",

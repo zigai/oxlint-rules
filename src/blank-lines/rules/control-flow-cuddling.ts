@@ -1,13 +1,18 @@
 import { bindingsFeedRegions, mutationFeedsRegions } from "../references.ts";
 import {
     compactStatementBoundary,
-    deferredGuardBoundary,
-    isPreflightSetup,
     statementGroupingDefaults,
     statementGroupingSchema,
     type StatementGroupingOptions,
 } from "../related-statements.ts";
-import { asNode, caseConsequent, isSingleLine, nodeArray, statementBody } from "../ast.ts";
+import {
+    asNode,
+    caseConsequent,
+    isSingleLine,
+    nodeArray,
+    statementBody,
+    unwrapExport,
+} from "../ast.ts";
 import {
     createLayoutRule,
     editFix,
@@ -127,6 +132,18 @@ function bodyNodes(node: AstNode, mode: BodyUsage): readonly AstNode[] {
     return mode === "first" ? firstStatements(body) : [body];
 }
 
+function isMultilineCallbackDefinition(node: AstNode, sourceCode: SourceCode): boolean {
+    const declaration = unwrapExport(node);
+    if (declaration.type !== "VariableDeclaration") return false;
+    const declarators = nodeArray(declaration.declarations);
+    if (declarators.length !== 1) return false;
+    const initializer = asNode(declarators[0]?.init);
+    return (
+        initializer?.type === "ArrowFunctionExpression" &&
+        !isSingleLine(initializer, sourceCode.text)
+    );
+}
+
 function bindingsAreRelated(
     candidate: AstNode,
     control: AstNode,
@@ -232,6 +249,8 @@ export default createLayoutRule<Options>(
             "Insert a blank line before this control-flow statement; it is not preceded by a related declaration or assignment.",
         tooMany:
             "Insert a blank line before this control-flow statement; at most {{maximum}} statement(s) may cuddle with it.",
+        callbackPhase:
+            "Insert a blank line before this traversal; the callback defined above is a separate preparation phase.",
     },
     (context: RuleContext<Options>) => {
         const options: Required<ControlFlowCuddlingOptions> = {
@@ -246,25 +265,6 @@ export default createLayoutRule<Options>(
                 if (kind === null || !options.controlFlow.includes(kind)) {
                     continue;
                 }
-                if (
-                    options.compactInitializations &&
-                    current === statements[2] &&
-                    isPreflightSetup(statements, sourceCode)
-                ) {
-                    const edit = editForPolicy(sourceCode, previous, current, "always");
-                    if (edit !== null)
-                        context.report({
-                            node: current,
-                            messageId: "unrelated",
-                            fix: editFix(edit),
-                        });
-                    continue;
-                }
-                if (
-                    options.compactRelatedSetup &&
-                    deferredGuardBoundary(statements, statements.indexOf(current), sourceCode)
-                )
-                    continue;
                 if (
                     compactStatementBoundary(
                         container,
@@ -343,6 +343,20 @@ export default createLayoutRule<Options>(
                                         sourceCode,
                                     ))),
                     );
+                if (
+                    (kind === "for" || kind === "while") &&
+                    isMultilineCallbackDefinition(previous, sourceCode) &&
+                    bindingsAreRelated(previous, current, options, sourceCode)
+                ) {
+                    const edit = editForPolicy(sourceCode, previous, current, "always");
+                    if (edit !== null)
+                        context.report({
+                            node: current,
+                            messageId: "callbackPhase",
+                            fix: editFix(edit),
+                        });
+                    continue;
+                }
                 if (!tooMany && related && !compact) continue;
                 const edit = editForPolicy(
                     sourceCode,

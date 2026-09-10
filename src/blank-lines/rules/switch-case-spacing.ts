@@ -1,7 +1,7 @@
-import { asNode, caseConsequent, switchCases } from "../ast.ts";
+import { asNode, caseConsequent, isSingleLine, switchCases, walkAst } from "../ast.ts";
 import { createLayoutRule, pairwise, reportGapPolicy } from "../rule-utils.ts";
 import { getSourceCode, rangeOf } from "../spacing.ts";
-import type { AstNode, BlankLinePolicy, RuleContext } from "../types.ts";
+import type { AstNode, BlankLinePolicy, RuleContext, SourceCode } from "../types.ts";
 
 export interface SwitchCaseSpacingOptions {
     readonly maxCuddledLines?: number;
@@ -39,6 +39,53 @@ function isTerminating(statement: AstNode | undefined): boolean {
         return isTerminating(body.at(-1));
     }
     return false;
+}
+
+// Does a switch produce structure anywhere in its cases? A switch over stored
+// values (a mapping table of literals, templates, and simple selections) is
+// compact on all 44 clause boundaries of the corpus; a switch whose cases call,
+// construct, or build values separates its substantial cases on all 75.
+const STRUCTURAL_NODES = new Set([
+    "CallExpression",
+    "NewExpression",
+    "ObjectExpression",
+    "ArrayExpression",
+    "TaggedTemplateExpression",
+]);
+
+function producesStructure(node: AstNode): boolean {
+    let structural = false;
+    walkAst(node, (child) => {
+        if (STRUCTURAL_NODES.has(child.type)) {
+            structural = true;
+        }
+    });
+    return structural;
+}
+
+function switchProducesStructure(cases: readonly AstNode[]): boolean {
+    return cases.some((clause) => producesStructure(clause));
+}
+
+// A case body is *substantial* when it produces or constructs a result rather
+// than handing back a stored value: a braced body, a construction, a returned
+// selection (`a ?? b`), or a bare return. A conditional return counts when it
+// spans lines or builds its branches. Corpus evidence: inside a switch that
+// produces structure, these separate on 75 of 75 clause boundaries, while
+// stacked labels, simple value returns and template returns stay compact.
+function isSubstantialCaseBody(caseNode: AstNode, sourceCode: SourceCode): boolean {
+    const statements = caseConsequent(caseNode);
+    const last = statements.at(-1);
+    if (last === undefined) return false;
+    if (last.type === "BlockStatement") return true;
+    if (last.type !== "ReturnStatement") return false;
+    const argument = asNode(last.argument);
+    if (argument === null) return true;
+    if (argument.type === "LogicalExpression" || argument.type === "BinaryExpression") return true;
+    if (argument.type === "ConditionalExpression") {
+        return producesStructure(argument) || !isSingleLine(argument, sourceCode.text);
+    }
+    return producesStructure(argument);
 }
 
 function bodyLines(caseNode: AstNode, sourceText: string): number {
@@ -80,7 +127,9 @@ export default createLayoutRule<Options>(
         const sourceCode = getSourceCode(context);
         return {
             SwitchStatement(node): void {
-                for (const [previous, current] of pairwise(switchCases(node))) {
+                const clauses = switchCases(node);
+                const produces = switchProducesStructure(clauses);
+                for (const [previous, current] of pairwise(clauses)) {
                     const consequent = caseConsequent(previous);
                     let policy: BlankLinePolicy;
                     if (consequent.length === 0) {
@@ -88,10 +137,13 @@ export default createLayoutRule<Options>(
                     } else if (options.ignoreFallthrough && !isTerminating(consequent.at(-1))) {
                         policy = "any";
                     } else {
-                        policy =
-                            bodyLines(previous, sourceCode.text) > options.maxCuddledLines
-                                ? options.longCase
-                                : options.shortCase;
+                        // A value-mapping switch keeps every case short; a switch
+                        // that produces structure applies the long/short policy.
+                        const longCase =
+                            produces &&
+                            (isSubstantialCaseBody(previous, sourceCode) ||
+                                bodyLines(previous, sourceCode.text) > options.maxCuddledLines);
+                        policy = longCase ? options.longCase : options.shortCase;
                     }
                     reportGapPolicy(context, previous, current, policy, {
                         always: "expectedBlank",

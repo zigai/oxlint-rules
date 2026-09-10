@@ -2,7 +2,6 @@ import {
     asNode,
     collectPatternNames,
     isSingleLine,
-    lineSpan,
     nodeArray,
     statementBody,
     unwrapExport,
@@ -21,8 +20,8 @@ import {
     callsUseSameTarget,
 } from "./references.ts";
 import { rangeOf } from "./spacing.ts";
-import type { AstNode, SourceCode } from "./types.ts";
-
+import { declarationKind } from "./selectors.ts";
+import type { AstNode, ScopeVariable, SourceCode } from "./types.ts";
 export interface StatementGroupingOptions {
     readonly compactShortBodies?: boolean;
     readonly compactInitializations?: boolean;
@@ -70,7 +69,7 @@ function isSmallExpressionTree(node: AstNode): boolean {
     return withinNodeBudget(node);
 }
 
-function isSmallValueDeclaration(node: AstNode): boolean {
+export function isSmallValueDeclaration(node: AstNode): boolean {
     return (
         withinNodeBudget(node) &&
         nodeArray(unwrapExport(node).declarations).every((declaration) => {
@@ -93,12 +92,25 @@ export function isSingleLineVariable(node: AstNode, sourceCode: SourceCode): boo
     return unwrapExport(node).type === "VariableDeclaration" && isSingleLine(node, sourceCode.text);
 }
 
+// A declaration that selects between two constructed values reads its inputs
+// either way; the node budget that guards other consumers does not decide it.
+function conditionalInitializerDeclaration(statement: AstNode): boolean {
+    const declaration = unwrapExport(statement);
+    if (declaration.type !== "VariableDeclaration") return false;
+    const declarations = nodeArray(declaration.declarations);
+    if (declarations.length !== 1) return false;
+    return asNode(declarations[0]?.init)?.type === "ConditionalExpression";
+}
+
 export function usesDeclaredBindings(
     previous: AstNode,
     current: AstNode,
     sourceCode: SourceCode,
 ): boolean {
-    return isSmallExpressionTree(current) && bindingsFeedRegions(previous, [current], sourceCode);
+    return (
+        (isSmallExpressionTree(current) || conditionalInitializerDeclaration(current)) &&
+        bindingsFeedRegions(previous, [current], sourceCode)
+    );
 }
 
 export function initializesInTry(
@@ -179,12 +191,61 @@ function smallControlHeader(node: AstNode): AstNode | null {
     return asNode(node.test) ?? asNode(node.right);
 }
 
+// A conditional that reads as one visual unit: an unbraced consequent that fits
+// on a single line, with no alternate branch. Adjacent multiline conditional
+// operations are distinct phases even when they test and update shared state.
+function isCompactConditionalBranch(node: AstNode, sourceCode: SourceCode): boolean {
+    if (node.type !== "IfStatement" || asNode(node.alternate) !== null) return false;
+    const consequent = asNode(node.consequent);
+    return (
+        consequent !== null &&
+        consequent.type !== "BlockStatement" &&
+        isSingleLine(consequent, sourceCode.text)
+    );
+}
+
+function isEarlyExitConsequent(node: AstNode): boolean {
+    if (node.type !== "IfStatement" || asNode(node.alternate) !== null) return false;
+    const consequent = asNode(node.consequent);
+    return consequent?.type === "ReturnStatement" || consequent?.type === "ThrowStatement";
+}
+
+// An update group continues only through single-line steps: once a step wraps
+// onto several lines, the next boundary separates. Guard sequences (early
+// exits) stay compact while every step reads as one unit.
+function continuesCompactPair(
+    previous: AstNode,
+    current: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    if (
+        !isCompactConditionalBranch(previous, sourceCode) ||
+        !isCompactConditionalBranch(current, sourceCode)
+    )
+        return false;
+    return (
+        isSingleLine(previous, sourceCode.text) ||
+        (isEarlyExitConsequent(previous) && isEarlyExitConsequent(current))
+    );
+}
+
 function relatedControlBoundary(
     previous: AstNode,
     current: AstNode,
     sourceCode: SourceCode,
 ): boolean {
     if (previous.type !== current.type) return false;
+    if (previous.type === "IfStatement" && !continuesCompactPair(previous, current, sourceCode))
+        return false;
+    // Consecutive loops are independent traversal passes even when they read
+    // the same state (forward/backward scans, delete/insert passes, head/tail
+    // selection): they read as one unit only as compact single-line loops.
+    if (
+        LOOP_TYPES.has(previous.type) &&
+        (!isSingleLine(previous, sourceCode.text) || !isSingleLine(current, sourceCode.text))
+    ) {
+        return false;
+    }
     const left = smallControlHeader(previous);
     const right = smallControlHeader(current);
     return left !== null && right !== null && shareReadBinding(left, right, sourceCode);
@@ -218,6 +279,32 @@ function isSimpleConditionalOperation(node: AstNode): boolean {
     );
 }
 
+function isPlainValue(node: AstNode | null): boolean {
+    if (node === null) return false;
+    if (node.type === "Identifier" || node.type === "Literal" || node.type === "ThisExpression")
+        return true;
+    if (node.type === "MemberExpression" || node.type === "OptionalMemberExpression") {
+        const object = asNode(node.object);
+        if (object === null || !isPlainValue(object)) return false;
+        if (node.computed !== true) return true;
+        return isPlainValue(asNode(node.property));
+    }
+    return false;
+}
+
+// Plain accumulation tallies a plain value: bare updates and plain
+// assignments. Constructed values (nested calls, templates, object
+// literals) are construction phases of their own.
+function isPlainAccumulation(operation: AstNode): boolean {
+    const expression = asNode(operation.expression);
+    if (expression === null) return false;
+    if (expression.type === "UpdateExpression") return true;
+    if (expression.type === "AssignmentExpression") {
+        return isPlainValue(asNode(expression.right));
+    }
+    return false;
+}
+
 function accumulatorReturnBoundary(
     statements: readonly AstNode[],
     index: number,
@@ -239,8 +326,62 @@ function accumulatorReturnBoundary(
         operation !== null &&
         operation !== undefined &&
         isSimpleStatement(operation) &&
+        isPlainAccumulation(operation) &&
         declarationInitializesMutation(setup, operation, sourceCode) &&
         mutationFeedsRegions(operation, [argument], sourceCode)
+    );
+}
+
+const LOOP_TYPES: ReadonlySet<string> = new Set([
+    "ForStatement",
+    "ForInStatement",
+    "ForOfStatement",
+    "WhileStatement",
+    "DoWhileStatement",
+]);
+
+function isPlainAppend(
+    node: AstNode,
+    method: string,
+    returnedBinding: ScopeVariable,
+    sourceCode: SourceCode,
+): boolean {
+    if (node.type !== "ExpressionStatement") return false;
+    const expression = asNode(node.expression);
+    if (expression?.type !== "CallExpression" || expression.optional === true) return false;
+    const callee = asNode(expression.callee);
+    const receiver = callee?.type === "MemberExpression" ? asNode(callee.object) : null;
+    const property = asNode(callee?.property);
+    return (
+        receiver?.type === "Identifier" &&
+        callee?.computed !== true &&
+        callee?.optional !== true &&
+        property?.type === "Identifier" &&
+        property.name === method &&
+        typeof receiver.name === "string" &&
+        nodeArray(expression.arguments).length >= (method === "set" ? 2 : 1) &&
+        nodeArray(expression.arguments).every((argument) => isPlainValue(asNode(argument))) &&
+        resolveBinding(receiver, receiver.name, sourceCode) === returnedBinding
+    );
+}
+
+// Nested loops contribute only plain accumulation of their own: extraction,
+// derivation, and branching inside are grouping phases, not silent appends.
+function nestedLoopAccumulatesPlainly(
+    loop: AstNode,
+    method: string,
+    returnedBinding: ScopeVariable,
+    sourceCode: SourceCode,
+): boolean {
+    const body = asNode(loop.body);
+    const operations = body?.type === "BlockStatement" ? statementBody(body) : [body];
+    return operations.every(
+        (operation) =>
+            operation !== null &&
+            operation !== undefined &&
+            (isPlainAppend(operation, method, returnedBinding, sourceCode) ||
+                (LOOP_TYPES.has(operation.type) &&
+                    nestedLoopAccumulatesPlainly(operation, method, returnedBinding, sourceCode))),
     );
 }
 
@@ -319,6 +460,9 @@ function collectionLoopBoundary(
         if (setup === undefined) return false;
         const method = collectionAppendMethod(setup, returned, sourceCode);
         if (method === null) return false;
+        // Only plain accumulation keeps the result attached: extraction,
+        // derivation, and branching inside the loop are grouping phases.
+        if (!nestedLoopAccumulatesPlainly(loop, method, returnedBinding, sourceCode)) return false;
         let transfersControl = false;
         let accumulates = false;
         walkAst(loop, (node) => {
@@ -394,35 +538,6 @@ function collectionLoopBoundary(
     );
 }
 
-export function deferredGuardBoundary(
-    statements: readonly AstNode[],
-    index: number,
-    sourceCode: SourceCode,
-): boolean {
-    const operation = statements[index - 1];
-    const control = statements[index];
-    const condition = control?.type === "IfStatement" ? asNode(control.test) : null;
-    const expression =
-        operation?.type === "ExpressionStatement" ? asNode(operation.expression) : null;
-    if (
-        operation === undefined ||
-        condition === null ||
-        expression?.type !== "CallExpression" ||
-        !isSimpleStatement(operation)
-    )
-        return false;
-    // A captured value can survive one conditional side effect before the call.
-    // Updates are not calls: advancing an index starts a separate decision phase.
-    for (let offset = index - 2; offset >= Math.max(0, index - 3); offset -= 1) {
-        const setup = statements[offset];
-        if (setup === undefined) return false;
-        if (isSingleLineVariable(setup, sourceCode))
-            return bindingsFeedRegions(setup, [condition], sourceCode);
-        if (!isSimpleConditionalOperation(setup)) return false;
-    }
-    return false;
-}
-
 function isShortBody(container: AstNode, statements: readonly AstNode[]): boolean {
     const last = statements.at(-1);
     return (
@@ -434,9 +549,16 @@ function isShortBody(container: AstNode, statements: readonly AstNode[]): boolea
         statements.every(
             (statement) =>
                 isSimpleStatement(statement) ||
+                // A tiny helper stays whole at function scope; the same two
+                // lines nested inside a larger block are separate steps.
                 (statements.length === 2 &&
                     last.type === "ReturnStatement" &&
                     asNode(last.argument) === null &&
+                    [
+                        "FunctionDeclaration",
+                        "FunctionExpression",
+                        "ArrowFunctionExpression",
+                    ].includes(asNode(container.parent)?.type ?? "") &&
                     isSimpleConditionalOperation(statement)),
         )
     );
@@ -452,7 +574,7 @@ function simpleGuard(node: AstNode): AstNode | null {
         : null;
 }
 
-function conditionalMutation(statement: AstNode, sourceCode: SourceCode): AstNode | null {
+export function conditionalMutation(statement: AstNode, sourceCode: SourceCode): AstNode | null {
     if (statement.type !== "IfStatement") return null;
     const mutations: AstNode[] = [];
     for (const branch of [asNode(statement.consequent), asNode(statement.alternate)]) {
@@ -486,36 +608,9 @@ function structuralExitBoundary(
         guard !== null &&
         nextGuard !== null &&
         typeof asNode(guard.argument)?.value === "boolean" &&
-        typeof asNode(nextGuard.argument)?.value === "boolean"
-    )
-        return true;
-    // A tiny narrowing helper is one decision, not a guard phase and a work phase.
-    const first = statements[0];
-    const setup = statements[1];
-    const result = statements[2];
-    if (
-        statements.length === 3 &&
-        first !== undefined &&
-        simpleGuard(first) !== null &&
-        setup?.type === "VariableDeclaration" &&
-        isSmallValueDeclaration(setup) &&
-        result?.type === "ReturnStatement" &&
-        isSimpleStatement(result) &&
-        shareReadBinding(first, setup, sourceCode) &&
-        bindingsFeedRegions(setup, [result], sourceCode)
-    )
-        return true;
-    // Iterator exhaustion followed by consumption of that same iterator result.
-    const before = statements[index - 2];
-    if (
-        guard !== null &&
-        before?.type === "VariableDeclaration" &&
-        ["ForStatement", "ForOfStatement", "WhileStatement"].includes(
-            asNode(container.parent)?.type ?? "",
-        ) &&
-        isSimpleStatement(current) &&
-        bindingsFeedRegions(before, [previous], sourceCode) &&
-        bindingsFeedRegions(before, [current], sourceCode)
+        typeof asNode(nextGuard.argument)?.value === "boolean" &&
+        isSingleLine(previous, sourceCode.text) &&
+        isSingleLine(current, sourceCode.text)
     )
         return true;
     if (current.type !== "ReturnStatement") return false;
@@ -648,6 +743,12 @@ function cleanupCaptureBoundary(
     }
     return false;
 }
+function isFunctionScoped(root: unknown): boolean {
+    if (typeof root !== "object" || root === null || !("scope" in root)) return false;
+    const scope = root.scope;
+    if (typeof scope !== "object" || scope === null || !("type" in scope)) return false;
+    return scope.type !== "module" && scope.type !== "global";
+}
 
 function terminalAccountingBoundary(
     statements: readonly AstNode[],
@@ -668,14 +769,20 @@ function terminalAccountingBoundary(
     const body = branch?.type === "BlockStatement" ? statementBody(branch) : [];
     const success = body[0];
     const exit = body[1];
+    // Tallies owned by the function stay with it; counters held in module
+    // state are independent reporting units and separate.
+    const successTarget = success === undefined ? null : mutationPath(success, sourceCode);
+    const currentTarget = mutationPath(current, sourceCode);
     return (
         body.length === 2 &&
         success !== undefined &&
         isScalarAccounting(success) &&
         exit?.type === "ReturnStatement" &&
         asNode(exit.argument) === null &&
-        mutationPath(success, sourceCode) !== null &&
-        mutationPath(current, sourceCode) !== null
+        successTarget !== null &&
+        currentTarget !== null &&
+        isFunctionScoped(successTarget.root) &&
+        isFunctionScoped(currentTarget.root)
     );
 }
 
@@ -722,24 +829,9 @@ export function conditionalUpdateBoundary(
     const right =
         conditionalMutation(current, sourceCode) ?? (isSimpleStatement(current) ? current : null);
     if (left === null) return false;
-    if (current.type === "ReturnStatement") {
-        const argument = asNode(current.argument);
-        const consequent = asNode(previous.consequent);
-        const bodyStatements =
-            consequent?.type === "BlockStatement" ? statementBody(consequent) : [consequent];
-        const singleLineBody = bodyStatements.every(
-            (stmt) => stmt !== null && stmt !== undefined && isSingleLine(stmt, sourceCode.text),
-        );
-        return (
-            previous.type === "IfStatement" &&
-            singleLineBody &&
-            lineSpan(previous, sourceCode.text) <= 3 &&
-            argument?.type === "Identifier" &&
-            mutationFeedsRegions(left, [argument], sourceCode, true)
-        );
-    }
     if (right === null) return false;
     if (previous.type === "IfStatement" && current.type === "IfStatement") {
+        if (!continuesCompactPair(previous, current, sourceCode)) return false;
         const firstTest = asNode(previous.test);
         const secondTest = asNode(current.test);
         if (
@@ -792,7 +884,16 @@ function destructuredSetupBoundary(
 ): boolean {
     // Bind multiple outputs, account for one, then initialize a collection that
     // the immediately following consumer fills using the remaining outputs.
-    for (const start of [index - 1, index - 2]) {
+    // Only the declaration-to-update pair compacts for object patterns: the
+    // accounting step ends its phase before the collection setup begins.
+    // Positional tuple outputs keep the whole run together.
+    const starts = [index - 1];
+    const earlier = statements[index - 2];
+    if (earlier !== undefined) {
+        const pattern = asNode(nodeArray(unwrapExport(earlier).declarations)[0]?.id);
+        if (pattern?.type === "ArrayPattern") starts.push(index - 2);
+    }
+    for (const start of starts) {
         const declaration = statements[start];
         const update = statements[start + 1];
         const setup = statements[start + 2];
@@ -854,33 +955,33 @@ function tryFinallyBoundary(previous: AstNode, current: AstNode, sourceCode: Sou
     );
 }
 
-export function isPreflightSetup(statements: readonly AstNode[], sourceCode: SourceCode): boolean {
-    const operation = statements[0];
-    const setup = statements[1];
-    const guard = statements[2];
-    const owner = asNode(asNode(operation?.parent)?.parent);
+export function deferredGuardBoundary(
+    statements: readonly AstNode[],
+    index: number,
+    sourceCode: SourceCode,
+): boolean {
+    const operation = statements[index - 1];
+    const control = statements[index];
+    const condition = control?.type === "IfStatement" ? asNode(control.test) : null;
+    const expression =
+        operation?.type === "ExpressionStatement" ? asNode(operation.expression) : null;
     if (
-        statements.length < 4 ||
         operation === undefined ||
-        setup === undefined ||
-        guard === undefined ||
-        !["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(
-            owner?.type ?? "",
-        ) ||
-        asNode(operation.expression)?.type !== "CallExpression" ||
-        !isSimpleStatement(operation) ||
-        !isSingleLineVariable(setup, sourceCode) ||
-        !isSmallValueDeclaration(setup)
+        condition === null ||
+        expression?.type !== "CallExpression" ||
+        !isSimpleStatement(operation)
     )
         return false;
-    const exit = simpleGuard(guard);
-    const condition = asNode(guard.test);
-    return (
-        exit !== null &&
-        asNode(exit.argument) === null &&
-        condition !== null &&
-        bindingsFeedRegions(setup, [condition], sourceCode)
-    );
+    // A captured value can survive one conditional side effect before the call.
+    // Updates are not calls: advancing an index starts a separate decision phase.
+    for (let offset = index - 2; offset >= Math.max(0, index - 3); offset -= 1) {
+        const setup = statements[offset];
+        if (setup === undefined) return false;
+        if (isSingleLineVariable(setup, sourceCode))
+            return bindingsFeedRegions(setup, [condition], sourceCode);
+        if (!isSimpleConditionalOperation(setup)) return false;
+    }
+    return false;
 }
 
 export function compactStatementBoundary(
@@ -893,10 +994,30 @@ export function compactStatementBoundary(
     const previous = statements[index - 1];
     const current = statements[index];
     if (previous === undefined || current === undefined) return false;
+    if (startsDeclarationPhase(previous, current, sourceCode)) return false;
+    // A multiline loop body is a phase of its own: the statement after it starts
+    // a new phase (165 corpus instances separate, none cuddle).
+    if (LOOP_TYPES.has(previous.type) && !isSingleLine(previous, sourceCode.text)) {
+        return false;
+    }
+    // A bare `return;` that closes the container after a multiline step is its
+    // own line (13 of 13 corpus instances separate).
+    if (
+        current.type === "ReturnStatement" &&
+        asNode(current.argument) === null &&
+        !isSingleLine(previous, sourceCode.text)
+    ) {
+        return false;
+    }
+    // A guard completes a step: the next write to the state it inspected starts
+    // a new one (24 of 24 corpus instances separate).
+    if (
+        previous.type === "IfStatement" &&
+        mutationFeedsRegions(previous, [current], sourceCode, true)
+    ) {
+        return false;
+    }
     return (
-        (options.compactInitializations === true &&
-            index === 1 &&
-            isPreflightSetup(statements, sourceCode)) ||
         (options.compactWrappedDeclarations === true &&
             (returnedClosureBoundary(previous, current, sourceCode) ||
                 cleanupCaptureBoundary(statements, index, sourceCode))) ||
@@ -904,9 +1025,6 @@ export function compactStatementBoundary(
             terminalAccountingBoundary(statements, index, sourceCode)) ||
         (options.compactShortBodies === true &&
             structuralExitBoundary(container, statements, index, sourceCode)) ||
-        (options.compactRelatedControlFlow === true &&
-            isSingleLineVariable(previous, sourceCode) &&
-            deferredGuardBoundary(statements, index + 1, sourceCode)) ||
         (options.compactDestructuredSetup === true &&
             destructuredSetupBoundary(statements, index, sourceCode)) ||
         (options.compactTryFinally === true && tryFinallyBoundary(previous, current, sourceCode)) ||
@@ -922,12 +1040,70 @@ export function compactStatementBoundary(
         (options.compactWrappedDeclarations === true &&
             wrappedDeclarationBoundary(previous, current, sourceCode)) ||
         (options.compactRelatedControlFlow === true &&
+            isSingleLineVariable(previous, sourceCode) &&
+            deferredGuardBoundary(statements, index + 1, sourceCode)) ||
+        (options.compactRelatedControlFlow === true &&
             relatedControlBoundary(previous, current, sourceCode)) ||
         (options.compactInitializations === true &&
             initializationBoundary(container, statements, index, sourceCode)) ||
+        (options.compactWrappedDeclarations === true &&
+            compactValueAliasStep(previous, current, sourceCode)) ||
         (options.compactConditionalUpdates === true &&
             mutationBoundary(statements, index, sourceCode))
     );
+}
+
+// A completed step and a following declaration start separate phases: the
+// declaration derives or captures state of its own. The exception is a
+// declaration that consumes what the step just wrote (a receiver reset
+// followed by a read of that receiver).
+export function startsDeclarationPhase(
+    previous: AstNode,
+    current: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    if (previous.type !== "ExpressionStatement") return false;
+    if (declarationKind(current) === null) return false;
+    const expression = asNode(previous.expression);
+    const completedStep =
+        expression?.type === "CallExpression" ||
+        (expression?.type === "AssignmentExpression" && expression.operator === "=");
+    return (
+        completedStep &&
+        isSingleLine(previous, sourceCode.text) &&
+        !mutationFeedsRegions(previous, [unwrapExport(current)], sourceCode, true)
+    );
+}
+
+// A single-line declaration that names a value and the single-line statement
+// that follows it are one step: the local alias feeds the next line. Corpus
+// evidence: 74 of 74 such boundaries stay compact (48 member-access aliases and
+// 26 name bindings), with no separated instance.
+export function compactValueAliasStep(
+    previous: AstNode,
+    current: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    if (!isSingleLine(previous, sourceCode.text) || !isSingleLine(current, sourceCode.text)) {
+        return false;
+    }
+    const declaration = unwrapExport(previous);
+    if (declaration.type !== "VariableDeclaration") return false;
+    const declarations = nodeArray(declaration.declarations);
+    if (declarations.length !== 1) return false;
+    const initializer = asNode(declarations[0]?.init);
+    if (initializer === null) return false;
+    if (
+        !new Set([
+            "Identifier",
+            "MemberExpression",
+            "PropertyAccessExpression",
+            "ElementAccessExpression",
+        ]).has(initializer.type)
+    ) {
+        return false;
+    }
+    return current.type === "ExpressionStatement";
 }
 
 export function isCompactExitPredecessor(
