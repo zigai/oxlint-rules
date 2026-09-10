@@ -174,13 +174,13 @@ Controls spacing between `case` and `default` blocks in `switch` statements.
 }
 ```
 
-| Option              | Type    | Default   | Description                                                                                       |
-| ------------------- | ------- | --------- | ------------------------------------------------------------------------------------------------- |
-| `maxCuddledLines`   | number  | `2`       | Non-blank body line threshold distinguishing short cases from long cases.                         |
-| `longCase`          | policy  | `"never"` | Blank line policy before cases longer than `maxCuddledLines` (`"always"`, `"never"`, or `"any"`). |
-| `shortCase`         | policy  | `"never"` | Blank line policy before short cases.                                                             |
-| `emptyCase`         | policy  | `"never"` | Blank line policy between consecutive empty fallthrough cases.                                    |
-| `ignoreFallthrough` | boolean | `true`    | Preserve existing spacing for fallthrough cases without a terminating jump.                       |
+| Option              | Type    | Default   | Description                                                                 |
+| ------------------- | ------- | --------- | --------------------------------------------------------------------------- |
+| `maxCuddledLines`   | number  | `2`       | Non-blank body line threshold distinguishing short cases from long cases.   |
+| `longCase`          | policy  | `"never"` | Blank line policy before long cases (`"always"`, `"never"`, or `"any"`).    |
+| `shortCase`         | policy  | `"never"` | Blank line policy before short cases.                                       |
+| `emptyCase`         | policy  | `"never"` | Blank line policy between consecutive empty fallthrough cases.              |
+| `ignoreFallthrough` | boolean | `true`    | Preserve existing spacing for fallthrough cases without a terminating jump. |
 
 ### `blank-lines/control-flow-cuddling`
 
