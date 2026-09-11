@@ -66,8 +66,9 @@ export const recommendedRules = {
     "blank-lines/switch-case-spacing": [
         "warn",
         {
+            default: "never",
             maxCuddledLines: 2,
-            longCase: "always",
+            longCase: "never",
             shortCase: "never",
             emptyCase: "never",
             ignoreFallthrough: true,

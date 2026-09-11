@@ -4,6 +4,7 @@ import { getSourceCode, rangeOf } from "../spacing.ts";
 import type { AstNode, BlankLinePolicy, RuleContext, SourceCode } from "../types.ts";
 
 export interface SwitchCaseSpacingOptions {
+    readonly default?: BlankLinePolicy;
     readonly maxCuddledLines?: number;
     readonly longCase?: BlankLinePolicy;
     readonly shortCase?: BlankLinePolicy;
@@ -14,6 +15,7 @@ export interface SwitchCaseSpacingOptions {
 type Options = readonly [SwitchCaseSpacingOptions?];
 
 const DEFAULTS: Required<SwitchCaseSpacingOptions> = {
+    default: "never",
     maxCuddledLines: 2,
     longCase: "never",
     shortCase: "never",
@@ -96,6 +98,7 @@ export default createLayoutRule<Options>(
             type: "object",
             additionalProperties: false,
             properties: {
+                default: { enum: ["always", "never", "any"] },
                 maxCuddledLines: { type: "integer", minimum: 0 },
                 longCase: { enum: ["always", "never", "any"] },
                 shortCase: { enum: ["always", "never", "any"] },
@@ -109,7 +112,14 @@ export default createLayoutRule<Options>(
         unexpectedBlank: "Unexpected blank line before this switch case.",
     },
     (context: RuleContext<Options>) => {
-        const options = { ...DEFAULTS, ...context.options[0] };
+        const config = context.options[0] ?? {};
+        const basePolicy = config.default ?? DEFAULTS.default;
+        const options: Required<SwitchCaseSpacingOptions> = {
+            ...DEFAULTS,
+            longCase: basePolicy,
+            shortCase: basePolicy,
+            ...config,
+        };
         const sourceCode = getSourceCode(context);
         return {
             SwitchStatement(node): void {
