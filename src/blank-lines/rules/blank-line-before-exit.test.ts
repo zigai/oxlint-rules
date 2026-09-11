@@ -159,6 +159,17 @@ tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
 }
 `,
         },
+        {
+            name: "keeps single-line actions compact with continue or break",
+            code: `for (const token of tokens) {
+    if (token.type === "flag") {
+        handle(token);
+    }
+    consume(token);
+    continue;
+}
+`,
+        },
     ],
     invalid: [
         ...[
