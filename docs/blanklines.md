@@ -599,6 +599,7 @@ switch (value) {
 
 | Option              | Type                           | Default   | Description                                                                 |
 | ------------------- | ------------------------------ | --------- | --------------------------------------------------------------------------- |
+| `default`           | `"always" \| "never" \| "any"` | `"never"` | Default blank line policy before switch cases.                              |
 | `maxCuddledLines`   | `number`                       | `2`       | Non-blank body line threshold distinguishing short cases from long cases.   |
 | `longCase`          | `"always" \| "never" \| "any"` | `"never"` | Blank line policy before cases longer than `maxCuddledLines`.               |
 | `shortCase`         | `"always" \| "never" \| "any"` | `"never"` | Blank line policy before short cases.                                       |
