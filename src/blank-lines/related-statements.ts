@@ -543,7 +543,6 @@ function isShortBody(container: AstNode, statements: readonly AstNode[]): boolea
         statements.every(
             (statement) =>
                 isSimpleStatement(statement) ||
-                // Only function bodies qualify for the two-statement helper exception.
                 (statements.length === 2 &&
                     last.type === "ReturnStatement" &&
                     asNode(last.argument) === null &&
@@ -704,10 +703,12 @@ export function returnedClosureBoundary(
 function isScalarAccounting(node: AstNode): boolean {
     const expression = asNode(node.expression);
     return (
-        expression?.type === "AssignmentExpression" &&
-        (expression.operator === "+=" || expression.operator === "-=") &&
-        asNode(expression.left)?.type === "Identifier" &&
-        typeof asNode(expression.right)?.value === "number"
+        (expression?.type === "AssignmentExpression" &&
+            (expression.operator === "+=" || expression.operator === "-=") &&
+            asNode(expression.left)?.type === "Identifier" &&
+            typeof asNode(expression.right)?.value === "number") ||
+        (expression?.type === "UpdateExpression" &&
+            asNode(expression.argument)?.type === "Identifier")
     );
 }
 
@@ -1222,6 +1223,12 @@ export function isCompactExitPredecessor(
     if (isSingleLineVariable(previous, sourceCode))
         return usesDeclaredBindings(previous, current, sourceCode);
     if (isAssertionStatement(previous, sourceCode)) return true;
+    if (
+        previous.type === "ExpressionStatement" &&
+        (current.type === "ContinueStatement" || current.type === "BreakStatement")
+    ) {
+        return true;
+    }
     if (previous.type !== "ExpressionStatement" || !isSmallExpressionTree(current)) return false;
     const expression = asNode(previous.expression);
     return expression?.type === "AssignmentExpression" || expression?.type === "UpdateExpression";
