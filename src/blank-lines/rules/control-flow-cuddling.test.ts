@@ -72,6 +72,16 @@ for (const row of source) {
 }
 `,
         },
+        {
+            name: "keeps object destructuring with a guard checking any of its properties",
+            code: `function render(target) {
+    const { group, properties } = target;
+    if (!group) return;
+
+    consume(properties);
+}
+`,
+        },
     ],
     invalid: [
         {
