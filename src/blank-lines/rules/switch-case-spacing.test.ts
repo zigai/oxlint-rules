@@ -29,6 +29,10 @@ tester.run("blank-lines/switch-case-spacing", switchCaseSpacing, {
                     run();
             }
         `,
+        {
+            options: [{ default: "always" }],
+            code: "switch (value) {\n    case 1:\n        return 1;\n\n    case 2:\n        return 2;\n}\n",
+        },
     ],
     invalid: [
         {
@@ -46,6 +50,12 @@ tester.run("blank-lines/switch-case-spacing", switchCaseSpacing, {
             code: "switch (value) {\n    case 1:\n\n    case 2:\n        run();\n}\n",
             output: "switch (value) {\n    case 1:\n    case 2:\n        run();\n}\n",
             errors: [{ messageId: "unexpectedBlank" }],
+        },
+        {
+            options: [{ default: "always" }],
+            code: "switch (value) {\n    case 1:\n        return 1;\n    case 2:\n        return 2;\n}\n",
+            output: "switch (value) {\n    case 1:\n        return 1;\n\n    case 2:\n        return 2;\n}\n",
+            errors: [{ messageId: "expectedBlank" }],
         },
     ],
 });

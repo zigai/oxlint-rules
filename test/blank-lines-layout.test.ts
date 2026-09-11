@@ -200,6 +200,19 @@ const fixtures = [
     }
 }
 `,
+        output: `function select(value) {
+    switch (value) {
+        case 1: {
+            const item = read();
+            return process(item);
+        }
+        case 2:
+            return fallback();
+        default:
+            return undefined;
+    }
+}
+`,
     },
     {
         name: "scoped-key.ts",

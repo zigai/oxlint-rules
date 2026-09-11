@@ -23,7 +23,6 @@ describe("compiled plugin", () => {
     case 1:
         work();
         return;
-
     case 2:
         return;
 }
