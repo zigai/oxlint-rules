@@ -155,6 +155,7 @@ function bindingsAreRelated(
         const aliases =
             declarations.length > 0 &&
             declarations.every((node) => {
+                if (asNode(node.id)?.type !== "Identifier") return false;
                 let initializer = asNode(node.init);
                 while (
                     initializer?.type === "ParenthesizedExpression" ||
@@ -192,6 +193,10 @@ function bindingsAreRelated(
         )
             return false;
     }
+    const isObjectPattern =
+        candidate.type === "VariableDeclaration" &&
+        asNode(nodeArray(candidate.declarations)[0]?.id)?.type === "ObjectPattern";
+    const requireAll = isObjectPattern ? false : options.requireAllBindings;
     const regions = [
         ...(options.allowConditionUsage ? headerNodes(control) : []),
         ...bodyNodes(control, options.allowBodyUsage),
@@ -202,7 +207,7 @@ function bindingsAreRelated(
             regions,
             sourceCode,
             options.includeAssignments,
-            options.requireAllBindings,
+            requireAll,
             "either",
         ) ||
         (options.includeAssignments &&
@@ -323,26 +328,32 @@ export default createLayoutRule<Options>(
                     options.compactRelatedSetup &&
                     !tooMany &&
                     related &&
-                    cuddled.every(
-                        (candidate) =>
-                            isSingleLine(candidate, sourceCode.text) &&
-                            options.allowConditionUsage &&
-                            (candidate !== previous ||
-                                bindingsFeedRegions(
-                                    candidate,
-                                    headerNodes(current),
-                                    sourceCode,
-                                    options.includeAssignments,
-                                    options.requireAllBindings,
-                                    "either",
-                                ) ||
-                                (options.includeAssignments &&
-                                    mutationFeedsRegions(
-                                        candidate,
-                                        headerNodes(current),
-                                        sourceCode,
-                                    ))),
-                    );
+                    cuddled.every((candidate) => {
+                        if (
+                            !isSingleLine(candidate, sourceCode.text) ||
+                            !options.allowConditionUsage
+                        ) {
+                            return false;
+                        }
+                        const decl = unwrapExport(candidate);
+                        const isObjectPattern =
+                            decl.type === "VariableDeclaration" &&
+                            asNode(nodeArray(decl.declarations)[0]?.id)?.type === "ObjectPattern";
+                        const requireAll = isObjectPattern ? false : options.requireAllBindings;
+                        return (
+                            candidate !== previous ||
+                            bindingsFeedRegions(
+                                candidate,
+                                headerNodes(current),
+                                sourceCode,
+                                options.includeAssignments,
+                                requireAll,
+                                "either",
+                            ) ||
+                            (options.includeAssignments &&
+                                mutationFeedsRegions(candidate, headerNodes(current), sourceCode))
+                        );
+                    });
                 if (
                     (kind === "for" || kind === "while") &&
                     isMultilineCallbackDefinition(previous, sourceCode) &&
