@@ -6,7 +6,7 @@ help:
     @just --list
 
 # Format code
-fmt:
+format:
     npm run format
 
 # Check code for lint issues
