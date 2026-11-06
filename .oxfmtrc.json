@@ -1,3 +1,6 @@
 {
-  "ignorePatterns": []
+  "ignorePatterns": ["**/*.md", "**/package-lock.json", "**/*-lock.json"],
+  "sortPackageJson": false,
+  "sortImports": false,
+  "sortTailwindcss": false
 }
