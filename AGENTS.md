@@ -97,9 +97,9 @@ Add the new rule to the corresponding table under `## Rules` in `README.md`:
 Run the full project verification suite before completing any changes:
 
 ```sh
-npm run format       # Formats code and markdown files with oxfmt
+just format          # Formats code and markdown files
 npm run doc:check    # Verifies all documentation examples against real rules
-npm run check        # Runs formatting, linting, typecheck, tests, package check, consumer check, and doc:check
+just check           # Runs formatting, linting, typecheck, tests, package check, consumer check, and doc:check
 ```
 
 `npm run doc:check` (`scripts/check-doc-examples.ts`) automatically validates that:

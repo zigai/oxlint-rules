@@ -422,8 +422,7 @@ An `unknown` parameter is allowed without options if:
 | **Valibot**              | `parse(schema, val)`, `safeParse(schema, val)` | Must resolve to a named import from `valibot`.        |
 | **Decoder objects**      | `.decode(val)`, `.safeDecode(val)`             | Must use the decoded result or handle typed failure.  |
 
-Top-level local helper functions are followed if the raw parameter has a single read and immediately delegates to a recognized parser.
----
+## Top-level local helper functions are followed if the raw parameter has a single read and immediately delegates to a recognized parser.
 
 ## antislop/no-unknown-returns
 

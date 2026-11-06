@@ -37,4 +37,4 @@ jobs:
         run: npm install --no-save --package-lock=false --legacy-peer-deps oxlint@${{ matrix.oxlint-version }} @oxlint/plugins@${{ matrix.oxlint-version }}
 
       - name: Check
-        run: npm run check
+        run: npm run format:check && npm run lint && npm run typecheck && npm run package:check && npm run consumer:check && npm run doc:check && npm test

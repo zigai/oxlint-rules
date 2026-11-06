@@ -83,8 +83,7 @@
     "consumer:check": "npm run build && node ./scripts/check-consumer.ts",
     "doc:check": "node ./scripts/check-doc-examples.ts",
     "prepack": "npm run build",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run package:check && npm run consumer:check && npm run doc:check",
-    "verify": "npm run check"
+    "format:files": "oxfmt"
   },
   "dependencies": {
     "@oxlint/plugins": "1.86.0"
