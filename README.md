@@ -1,8 +1,9 @@
 # Oxlint Rules
 
-[![npm version](https://img.shields.io/npm/v/oxlint-rules.svg?color=blue)](https://www.npmjs.com/package/oxlint-rules)
-[![npm downloads](https://img.shields.io/npm/dm/oxlint-rules.svg)](https://www.npmjs.com/package/oxlint-rules)
-[![license](https://img.shields.io/npm/l/oxlint-rules.svg)](LICENSE)
+[![tests](https://img.shields.io/github/actions/workflow/status/zigai/oxlint-rules/ci.yml?branch=main&label=tests&labelColor=30363d)](https://github.com/zigai/oxlint-rules/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/oxlint-rules?label=npm&color=blue&logo=npm&labelColor=30363d)](https://www.npmjs.com/package/oxlint-rules)
+[![downloads](https://img.shields.io/npm/dm/oxlint-rules?label=downloads&color=blue&labelColor=30363d)](https://www.npmjs.com/package/oxlint-rules)
+[![license](https://img.shields.io/github/license/zigai/oxlint-rules?label=license&labelColor=30363d)](LICENSE)
 
 A collection of custom Oxlint rules and presets for TypeScript projects.
 
