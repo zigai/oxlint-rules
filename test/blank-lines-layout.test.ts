@@ -453,6 +453,93 @@ const fixtures = [
         name: "nonadjacent-closure-captures.ts",
         input: "function factory() {\n    const first = load();\n    const unused = 0;\n    const second = load();\n\n    return () => combine(first, second);\n}\n",
     },
+    {
+        name: "documented-and-exported-groups.ts",
+        input: `/** The widest supported row. */
+export type Row = { readonly width: number };
+export type Column = { readonly height: number };
+type Cell = [x: number, y: number];
+
+const base = load("base");
+export const first = "first";
+export const second = base.second;
+const schema = build(base);
+
+export type Tile = {
+    /** How the pixels pack a height. */
+    readonly packing: string;
+    readonly size: number;
+};
+`,
+        output: `/** The widest supported row. */
+export type Row = { readonly width: number };
+
+export type Column = { readonly height: number };
+
+type Cell = [x: number, y: number];
+
+const base = load("base");
+
+export const first = "first";
+export const second = base.second;
+
+const schema = build(base);
+
+export type Tile = {
+    /** How the pixels pack a height. */
+    readonly packing: string;
+
+    readonly size: number;
+};
+`,
+    },
+    {
+        name: "named-union.ts",
+        input: `export type Shape =
+    | Circle
+    | Square
+    | Triangle;
+export type Shapes = Shape | readonly Shape[];
+
+type Loader = ShapeLoader;
+`,
+    },
+    {
+        name: "array-guard.ts",
+        input: `function parse(text) {
+    const [head, middle, ...rest] = text.split("-");
+    if (head === undefined) throw new Error("empty");
+
+    const pairs = Object.fromEntries(
+        rest.map((entry) => {
+            const [key, value, ...extra] = entry.split("=");
+            if (key === undefined || extra.length > 0) throw new Error("invalid");
+            return [key, value];
+        }),
+    );
+
+    return [head, middle, pairs];
+}
+`,
+    },
+    {
+        name: "iteration-callbacks.ts",
+        input: `export async function clear() {
+    const files = await list();
+    await Promise.all(files.map(async (file) => remove(file)));
+    return { count: files.length, bytes: files.reduce((sum, file) => sum + file.bytes, 0) };
+}
+
+export function key(values, wide, context) {
+    const ids = new Set(values.flatMap((value) => value.ids));
+    if (wide) Object.keys(context.sets).forEach((id) => ids.add(id));
+    const sets = [...ids].sort().map((id) => [id, context.sets[id]]);
+    if (sets.some(([, hash]) => hash === undefined)) return undefined;
+
+    return digest(sets);
+}
+`,
+    },
 ];
 
 describe("semantic statement spacing", () => {

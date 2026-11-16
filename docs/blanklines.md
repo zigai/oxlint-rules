@@ -328,13 +328,13 @@ const second = {
 
 ### Configuration
 
-| Option                          | Type                           | Default    | Description                                                                              |
-| ------------------------------- | ------------------------------ | ---------- | ---------------------------------------------------------------------------------------- |
-| `compactSingleLineDeclarations` | `boolean`                      | `true`     | Keep consecutive single-line declarations in the same group compact without blank lines. |
-| `separateMultilineDeclarations` | `boolean`                      | `true`     | Separate multiline type, interface, or variable declarations.                            |
-| `betweenGroups`                 | `"always" \| "never" \| "any"` | `"always"` | Blank line policy between different declaration groups (e.g. types vs variables).        |
-| `withinGroup`                   | `"always" \| "never" \| "any"` | `"any"`    | Fallback blank line policy within the same declaration group.                            |
-| `afterGroup`                    | `"always" \| "never" \| "any"` | `"always"` | Blank line policy after a declaration group before other statements.                     |
+| Option                          | Type                           | Default    | Description                                                                                                                               |
+| ------------------------------- | ------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `compactSingleLineDeclarations` | `boolean`                      | `true`     | Keep consecutive single-line declarations in the same group compact, except after a documented one and between exported and private ones. |
+| `separateMultilineDeclarations` | `boolean`                      | `true`     | Separate multiline type, interface, or variable declarations, except a one-line type that names the type above it.                        |
+| `betweenGroups`                 | `"always" \| "never" \| "any"` | `"always"` | Blank line policy between different declaration groups (e.g. types vs variables).                                                         |
+| `withinGroup`                   | `"always" \| "never" \| "any"` | `"any"`    | Fallback blank line policy within the same declaration group.                                                                             |
+| `afterGroup`                    | `"always" \| "never" \| "any"` | `"always"` | Blank line policy after a declaration group before other statements.                                                                      |
 
 ---
 
@@ -428,7 +428,7 @@ class Worker {
 
 ### What it does
 
-Controls spacing between members in TypeScript interfaces, type literals, and enums, keeping single-line members compact while separating multiline members.
+Controls spacing between members in TypeScript interfaces, type literals, and enums, keeping single-line members compact while separating multiline members and the member after a documented one.
 
 ### Why is this bad?
 

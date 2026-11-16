@@ -5,6 +5,15 @@ const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" }
 
 tester.run("blank-lines/blank-line-before-exit", blankLineBeforeExit, {
     valid: [
+        {
+            name: "keeps a short body compact when its callbacks run during the call",
+            code: `async function clear() {
+    const files = await list();
+    await Promise.all(files.map(async (file) => remove(file)));
+    return files.reduce((sum, file) => sum + file.bytes, 0);
+}
+`,
+        },
         "function factory() {\n    const first = load();\n    const unused = load();\n    const last = load();\n\n    return () => combine(first, last);\n}\n",
         {
             name: "allows a return immediately after a single-line guard",

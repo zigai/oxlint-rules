@@ -14,6 +14,7 @@ import {
     declarationInitializesMutation,
     directlyReferences,
     hasDeferredExecution,
+    isImplicitGlobal,
     mutationFeedsRegions,
     mutationPath,
     resolveBinding,
@@ -582,6 +583,48 @@ export function conditionalMutation(statement: AstNode, sourceCode: SourceCode):
     return first !== undefined && mutations.every((item) => sameMutation(first, item, sourceCode))
         ? first
         : null;
+}
+
+function updatedBinding(node: AstNode, sourceCode: SourceCode): ScopeVariable | null {
+    let target =
+        node.type === "AssignmentExpression"
+            ? asNode(node.left)
+            : node.type === "UpdateExpression"
+              ? asNode(node.argument)
+              : node.type === "CallExpression"
+                ? asNode(asNode(node.callee)?.object)
+                : null;
+    while (target?.type === "MemberExpression") target = asNode(target.object);
+    if (target?.type !== "Identifier" || typeof target.name !== "string") return null;
+    const binding = resolveBinding(target, target.name, sourceCode);
+    return binding === null || isImplicitGlobal(binding) ? null : binding;
+}
+
+// A one-line conditional update belongs to the step whose next declaration reads the updated value.
+export function conditionalUpdateFeedsDeclaration(
+    previous: AstNode,
+    current: AstNode,
+    sourceCode: SourceCode,
+): boolean {
+    if (
+        previous.type !== "IfStatement" ||
+        asNode(previous.alternate) !== null ||
+        !isSingleLine(previous, sourceCode.text)
+    )
+        return false;
+    const update = asNode(previous.consequent);
+    if (update?.type !== "ExpressionStatement") return false;
+    const updated = new Set<ScopeVariable>();
+    walkAst(update, (node) => {
+        const binding = updatedBinding(node, sourceCode);
+        if (binding !== null) updated.add(binding);
+    });
+    const declaration = unwrapExport(current);
+    return [...updated].some(
+        (binding) =>
+            directlyReferences(update, binding, "either") &&
+            directlyReferences(declaration, binding),
+    );
 }
 
 function structuralExitBoundary(

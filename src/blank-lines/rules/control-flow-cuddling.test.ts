@@ -16,6 +16,16 @@ const aliasInitializers = [
 
 tester.run("blank-lines/control-flow-cuddling", controlFlowCuddling, {
     valid: [
+        {
+            name: "keeps a guard with the array destructuring it checks",
+            code: `function parse(text) {
+    const [head, middle, ...rest] = text.split("-");
+    if (head === undefined) throw new Error("empty");
+
+    return [head, middle, rest];
+}
+`,
+        },
         ...aliasInitializers.map(
             (initializer) =>
                 `function configure(source) {\n    const target = ${initializer};\n    if (target) {\n        restore(target);\n    }\n}\n`,

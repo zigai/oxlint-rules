@@ -1,5 +1,6 @@
 import {
     compactStatementBoundary,
+    conditionalUpdateFeedsDeclaration,
     initializesInTry,
     isSingleLineVariable,
     returnedClosureBoundary,
@@ -12,6 +13,7 @@ import {
 import {
     areSameFunctionOverloads,
     asNode,
+    hasDocComment,
     isSingleLine,
     nodeArray,
     unwrapExport,
@@ -92,6 +94,29 @@ function groupIndex(
         return index;
     }
     return unlisted === "own-group" ? groups.length + DECLARATION_KINDS.indexOf(kind) : null;
+}
+
+function isExported(statement: AstNode): boolean {
+    return (
+        statement.type === "ExportNamedDeclaration" || statement.type === "ExportDefaultDeclaration"
+    );
+}
+
+function namesPreviousType(previous: AstNode, current: AstNode): boolean {
+    const name = asNode(unwrapExport(previous).id)?.name;
+    if (typeof name !== "string") return false;
+    let named = false;
+    walkAst(unwrapExport(current), (node) => {
+        const typeName = asNode(node.typeName);
+        if (
+            node.type === "TSTypeReference" &&
+            typeName?.type === "Identifier" &&
+            typeName.name === name
+        ) {
+            named = true;
+        }
+    });
+    return named;
 }
 
 function variableInitializer(statement: AstNode | undefined): AstNode | null {
@@ -336,6 +361,7 @@ export default createLayoutRule<Options>(
                 const previousKind = declarationKind(previous);
                 const currentKind = declarationKind(current);
                 let policy: BlankLinePolicy = "any";
+                let separated = false;
 
                 if (previousKind !== null && currentKind !== null) {
                     if (previousKind === "function" && currentKind === "function") {
@@ -383,14 +409,22 @@ export default createLayoutRule<Options>(
                                 previousSingle &&
                                 currentSingle
                             ) {
-                                policy = "never";
+                                // A doc comment covers one declaration, and exported
+                                // names are a group apart from private ones.
+                                separated =
+                                    hasDocComment(previous, sourceCode.text) ||
+                                    isExported(previous) !== isExported(current);
+                                policy = separated ? "always" : "never";
                             } else if (
                                 options.separateMultilineDeclarations &&
                                 (previousKind === "type" || previousKind === "interface") &&
                                 (currentKind === "type" || currentKind === "interface") &&
                                 (!previousSingle || !currentSingle)
                             ) {
-                                policy = "always";
+                                policy =
+                                    currentSingle && namesPreviousType(previous, current)
+                                        ? options.withinGroup
+                                        : "always";
                             }
                         }
                     }
@@ -423,6 +457,7 @@ export default createLayoutRule<Options>(
 
                 if (
                     (previousKind !== null || currentKind !== null) &&
+                    !separated &&
                     compactStatementBoundary(
                         container,
                         statements,
@@ -436,7 +471,12 @@ export default createLayoutRule<Options>(
                 // A declaration after a conditional starts a new phase: guards
                 // belong with the work they validate, not with the work that
                 // follows them. An already-claimed compact group keeps priority.
-                if (currentKind !== null && previous.type === "IfStatement" && policy !== "never") {
+                if (
+                    currentKind !== null &&
+                    previous.type === "IfStatement" &&
+                    policy !== "never" &&
+                    !conditionalUpdateFeedsDeclaration(previous, current, sourceCode)
+                ) {
                     policy = "always";
                 }
                 if (

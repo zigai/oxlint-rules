@@ -67,6 +67,21 @@ export function isSingleLine(node: AstNode, text?: string): boolean {
     return !/[\r\n]/.test(text.slice(startOf(node), endOf(node)));
 }
 
+export function hasDocComment(node: AstNode, text: string): boolean {
+    let end = startOf(node);
+    let lineBreaks = 0;
+    for (; end > 0; end -= 1) {
+        const character = text[end - 1];
+        if (character === "\n") lineBreaks += 1;
+        else if (character !== " " && character !== "\t" && character !== "\r") break;
+    }
+    return (
+        lineBreaks <= 1 &&
+        text.endsWith("*/", end) &&
+        text.startsWith("/**", text.lastIndexOf("/*", end - 2))
+    );
+}
+
 export function walkAst(
     value: unknown,
     visit: (node: AstNode, parent: AstNode | null, key: string | null) => void,

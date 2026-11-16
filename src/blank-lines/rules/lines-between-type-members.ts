@@ -1,4 +1,4 @@
-import { asNode, isSingleLine, typeMembers } from "../ast.ts";
+import { asNode, hasDocComment, isSingleLine, typeMembers } from "../ast.ts";
 import { createLayoutRule, pairwise, reportGapPolicy } from "../rule-utils.ts";
 import { anyTypeSelectorMatches, isTypeOverload, type TypeMemberSelector } from "../selectors.ts";
 import { getSourceCode } from "../spacing.ts";
@@ -91,7 +91,8 @@ function pairPolicy(
             policy = pair.blankLine;
         }
     }
-    return policy;
+    // A doc comment covers one member, so the next member does not join it.
+    return policy === "never" && hasDocComment(previous, sourceText) ? "always" : policy;
 }
 
 export default createLayoutRule<Options>(

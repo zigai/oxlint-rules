@@ -6,6 +6,33 @@ const tester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" }
 tester.run("blank-lines/declaration-group-spacing", declarationGroupSpacing, {
     valid: [
         {
+            name: "keeps a one-line type attached to the multiline type it names",
+            code: `export type Shape =
+    | Circle
+    | Square
+    | Triangle;
+export type Shapes = Shape | readonly Shape[];
+`,
+        },
+        {
+            name: "keeps a one-line conditional update with the declaration that reads it",
+            code: `function total(base, extra, bonus, rate) {
+    const parts = new Set(base);
+    if (extra) bonus.forEach((part) => parts.add(part));
+    const count = [...parts].length * rate;
+    return count;
+}
+`,
+        },
+        {
+            name: "keeps an iteration callback with the declaration it consumes",
+            code: `async function clear() {
+    const files = await list();
+    await Promise.all(files.map(async (file) => remove(file)));
+}
+`,
+        },
+        {
             languageOptions: { parserOptions: { lang: "tsx" } },
             code: `function Input({ id, name, type, className, ...props }) {
     const fallbackID = useId();
@@ -195,6 +222,56 @@ const pendingByDir = new WeakMap<
         },
     ],
     invalid: [
+        {
+            name: "separates a documented declaration from the next one",
+            code: `/** The widest supported row. */
+export type Row = { readonly width: number };
+export type Column = { readonly height: number };
+export type Cell = { readonly value: number };
+`,
+            output: `/** The widest supported row. */
+export type Row = { readonly width: number };
+
+export type Column = { readonly height: number };
+export type Cell = { readonly value: number };
+`,
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
+            name: "separates exported declarations from private ones",
+            code: `const base = load("base");
+export const first = "first";
+export const second = base.second;
+const schema = build(base);
+`,
+            output: `const base = load("base");
+
+export const first = "first";
+export const second = base.second;
+
+const schema = build(base);
+`,
+            errors: [{ messageId: "expectedBlank" }, { messageId: "expectedBlank" }],
+        },
+        {
+            name: "separates a declaration from a conditional that does not update what it reads",
+            code: `function total(base, extra, rate) {
+    const parts = new Set(base);
+    if (extra) report(rate);
+    const count = [...parts].length * rate;
+    return count;
+}
+`,
+            output: `function total(base, extra, rate) {
+    const parts = new Set(base);
+    if (extra) report(rate);
+
+    const count = [...parts].length * rate;
+    return count;
+}
+`,
+            errors: [{ messageId: "expectedBlank" }],
+        },
         {
             code: "export type JsonPrimitive = string | number | boolean | null;\nexport type JsonArray = ReadonlyArray<JsonValue>;\n\nexport type JsonValue = JsonPrimitive | JsonArray | JsonObject;\n",
             output: "export type JsonPrimitive = string | number | boolean | null;\nexport type JsonArray = ReadonlyArray<JsonValue>;\nexport type JsonValue = JsonPrimitive | JsonArray | JsonObject;\n",

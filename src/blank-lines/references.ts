@@ -1,4 +1,11 @@
-import { asNode, cuddleBindingNames, nodeArray, unwrapExport, walkAst } from "./ast.ts";
+import {
+    asNode,
+    cuddleBindingNames,
+    isSingleLine,
+    nodeArray,
+    unwrapExport,
+    walkAst,
+} from "./ast.ts";
 import { rangeOf } from "./spacing.ts";
 import type { AstNode, Scope, ScopeVariable, SourceCode } from "./types.ts";
 
@@ -10,12 +17,54 @@ const EXECUTION_BOUNDARIES = new Set([
     "ClassExpression",
 ]);
 
-export function hasDeferredExecution(node: AstNode): boolean {
-    let found = false;
-    walkAst(node, (child) => {
-        if (EXECUTION_BOUNDARIES.has(child.type)) found = true;
+const ITERATION_METHODS = new Set([
+    "every",
+    "filter",
+    "find",
+    "findIndex",
+    "findLast",
+    "findLastIndex",
+    "flatMap",
+    "forEach",
+    "map",
+    "reduce",
+    "reduceRight",
+    "some",
+    "sort",
+    "toSorted",
+]);
+
+// A one-line callback handed to an iteration method runs before that call returns
+// and reads as part of it.
+function runsDuringCall(node: AstNode, parent: AstNode | null, key: string | null): boolean {
+    if (key !== "arguments" || parent?.type !== "CallExpression") return false;
+    if (node.type !== "ArrowFunctionExpression" && node.type !== "FunctionExpression") return false;
+    if (!isSingleLine(node)) return false;
+    const callee = asNode(parent.callee);
+    const method = asNode(callee?.property);
+    if (
+        callee?.type !== "MemberExpression" ||
+        callee.computed === true ||
+        typeof method?.name !== "string"
+    )
+        return false;
+    if (ITERATION_METHODS.has(method.name)) return true;
+    const owner = asNode(callee.object);
+    return method.name === "from" && owner?.type === "Identifier" && owner.name === "Array";
+}
+
+function deferredRanges(root: AstNode): readonly (readonly [number, number])[] {
+    const ranges: Array<readonly [number, number]> = [];
+    walkAst(root, (node, parent, key) => {
+        if (EXECUTION_BOUNDARIES.has(node.type) && !runsDuringCall(node, parent, key)) {
+            ranges.push(rangeOf(node));
+        }
     });
-    return found;
+    return ranges;
+}
+
+export function hasDeferredExecution(node: AstNode): boolean {
+    return deferredRanges(node).length > 0;
 }
 
 export function resolveBinding(
@@ -36,10 +85,7 @@ export function directlyReferences(
     access: "read" | "write" | "either" = "read",
 ): boolean {
     const [start, end] = rangeOf(node);
-    const deferred: Array<readonly [number, number]> = [];
-    walkAst(node, (child) => {
-        if (EXECUTION_BOUNDARIES.has(child.type)) deferred.push(rangeOf(child));
-    });
+    const deferred = deferredRanges(node);
     return variable.references.some((reference) => {
         const [from, to] = rangeOf(reference.identifier);
         return (
@@ -55,6 +101,16 @@ export function directlyReferences(
     });
 }
 
+// Implicit unwritten globals are not shared application state. Synthetic
+// function bindings and actual declarations retain their binding identity.
+export function isImplicitGlobal(binding: ScopeVariable): boolean {
+    return (
+        binding.defs?.length === 0 &&
+        binding.scope.type === "global" &&
+        !binding.references.some((reference) => reference.isWrite())
+    );
+}
+
 export function shareReadBinding(left: AstNode, right: AstNode, sourceCode: SourceCode): boolean {
     let shared = false;
     walkAst(left, (node, parent, key) => {
@@ -65,16 +121,9 @@ export function shareReadBinding(left: AstNode, right: AstNode, sourceCode: Sour
         )
             return;
         const binding = resolveBinding(node, node.name, sourceCode);
-        // Implicit unwritten globals are not shared application state. Synthetic
-        // function bindings and actual declarations retain their binding identity.
-        if (
-            binding?.defs?.length === 0 &&
-            binding.scope.type === "global" &&
-            !binding.references.some((reference) => reference.isWrite())
-        )
-            return;
         if (
             binding !== null &&
+            !isImplicitGlobal(binding) &&
             directlyReferences(left, binding) &&
             directlyReferences(right, binding)
         )
@@ -258,9 +307,8 @@ export function mutationFeedsRegions(
     if (target === null) return false;
     return regions.some((region) => {
         let found = false;
-        const deferred: Array<readonly [number, number]> = [];
+        const deferred = deferredRanges(region);
         walkAst(region, (node) => {
-            if (EXECUTION_BOUNDARIES.has(node.type)) deferred.push(rangeOf(node));
             const [start, end] = rangeOf(node);
             if (deferred.some(([left, right]) => start >= left && end <= right)) return;
             const path = accessPath(node, sourceCode);

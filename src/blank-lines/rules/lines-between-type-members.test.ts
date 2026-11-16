@@ -20,6 +20,25 @@ tester.run("blank-lines/lines-between-type-members", linesBetweenTypeMembers, {
     ],
     invalid: [
         {
+            name: "separates a documented member from the next one",
+            code: `type Tile = {
+    /** How the pixels pack a height. */
+    readonly packing: string;
+    readonly size: number;
+    readonly zoom: number;
+};
+`,
+            output: `type Tile = {
+    /** How the pixels pack a height. */
+    readonly packing: string;
+
+    readonly size: number;
+    readonly zoom: number;
+};
+`,
+            errors: [{ messageId: "expectedBlank" }],
+        },
+        {
             code: "enum Status {\n    Ready,\n\n    Done,\n}\n",
             output: "enum Status {\n    Ready,\n    Done,\n}\n",
             errors: [{ messageId: "unexpectedBlank" }],

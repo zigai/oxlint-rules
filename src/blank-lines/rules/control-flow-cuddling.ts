@@ -144,6 +144,12 @@ function isMultilineCallbackDefinition(node: AstNode, sourceCode: SourceCode): b
     );
 }
 
+function isDestructuring(candidate: AstNode): boolean {
+    if (candidate.type !== "VariableDeclaration") return false;
+    const pattern = asNode(nodeArray(candidate.declarations)[0]?.id)?.type;
+    return pattern === "ObjectPattern" || pattern === "ArrayPattern";
+}
+
 function bindingsAreRelated(
     candidate: AstNode,
     control: AstNode,
@@ -193,10 +199,7 @@ function bindingsAreRelated(
         )
             return false;
     }
-    const isObjectPattern =
-        candidate.type === "VariableDeclaration" &&
-        asNode(nodeArray(candidate.declarations)[0]?.id)?.type === "ObjectPattern";
-    const requireAll = isObjectPattern ? false : options.requireAllBindings;
+    const requireAll = isDestructuring(candidate) ? false : options.requireAllBindings;
     const regions = [
         ...(options.allowConditionUsage ? headerNodes(control) : []),
         ...bodyNodes(control, options.allowBodyUsage),
@@ -335,11 +338,9 @@ export default createLayoutRule<Options>(
                         ) {
                             return false;
                         }
-                        const decl = unwrapExport(candidate);
-                        const isObjectPattern =
-                            decl.type === "VariableDeclaration" &&
-                            asNode(nodeArray(decl.declarations)[0]?.id)?.type === "ObjectPattern";
-                        const requireAll = isObjectPattern ? false : options.requireAllBindings;
+                        const requireAll = isDestructuring(unwrapExport(candidate))
+                            ? false
+                            : options.requireAllBindings;
                         return (
                             candidate !== previous ||
                             bindingsFeedRegions(
